@@ -1,0 +1,29 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"*.mq5": "cpp",
+			"*.mqh": "cpp"
+		},
+		"editor.formatOnSave": true,
+		"editor.detectIndentation": false,
+		"editor.insertSpaces": true,
+		"editor.tabSize": 3,
+		"[cpp]": {
+			"editor.defaultFormatter": "ms-vscode.cpptools"
+		},
+		"files.trimTrailingWhitespace": true,
+		"files.insertFinalNewline": true,
+		"files.eol": "\r\n"
+	},
+	"extensions": {
+		"recommendations": [
+			"ms-vscode.cpptools",
+			"EditorConfig.EditorConfig"
+		]
+	}
+}

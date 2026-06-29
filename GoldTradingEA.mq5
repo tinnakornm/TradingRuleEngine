@@ -1,0 +1,130 @@
+//+------------------------------------------------------------------+
+//| GoldTradingEA.mq5                                                |
+//| Trading Rule Engine - Alpha 1.0                                  |
+//| Modular refactor from GoldMicro Zone Dashboard v0.3              |
+//| Live-safe with Strategy Tester execution mode                    |
+//+------------------------------------------------------------------+
+#property strict
+
+#include "include/version.mqh"
+#include "include/config.mqh"
+#include "include/evidence.mqh"
+#include "include/globals.mqh"
+#include "include/common.mqh"
+
+#include "engine/swing_engine.mqh"
+#include "engine/trend_engine.mqh"
+#include "engine/zone_engine.mqh"
+#include "engine/regime_engine.mqh"
+#include "engine/structure_engine.mqh"
+#include "engine/momentum_engine.mqh"
+#include "engine/pressure_guard_engine.mqh"
+#include "engine/entry_engine.mqh"
+#include "engine/execution_engine.mqh"
+#include "engine/trade_engine.mqh"
+#include "engine/journal_engine.mqh"
+#include "engine/draw_engine.mqh"
+#include "engine/dashboard_engine.mqh"
+
+void RunEngineCycle(bool allowBacktestExecution)
+{
+   string symbol = GetTradeSymbol();
+
+   // Strategy Tester may not dispatch chart click events, so poll button state.
+   DashboardPollButtonState();
+
+   SwingEngine(symbol);
+   TrendEngine();
+   ZoneEngine(symbol);
+   StructureEngine(symbol);
+   MomentumEngine(symbol);
+   RegimeEngine(symbol);
+   PressureGuardEngine(symbol);
+   EntryEngine();
+
+   if(allowBacktestExecution)
+      ExecutionEngine(symbol);
+   else
+      TRE_RefreshExecutionState(symbol);
+
+   TradeEngine(symbol);
+   JournalEngine(symbol);
+   DrawEngine();
+   DashboardEngine(symbol);
+}
+
+int OnInit()
+{
+   int refreshSeconds = (EngineRefreshSeconds < 1) ? 1 : EngineRefreshSeconds;
+   EventSetTimer(refreshSeconds);
+   TRE_InitializeResearchConfig();
+   JournalInitialize(GetTradeSymbol());
+
+   Print("----------------------------------------");
+   Print("TRE INPUT CONFIGURATION");
+   Print("----------------------------------------");
+   Print("UseAutoRegimeDetection=",
+         UseAutoRegimeDetection);
+   Print("AllowAutoProfileSwitch=",
+         AllowAutoProfileSwitch);
+   Print("ManualMarketProfile=",
+         TRE_MarketProfileToText(ManualMarketProfile));
+   Print("RegimeTF=", TimeframeToText(RegimeTF));
+   Print("RegimeLookbackBars=", RegimeLookbackBars);
+   Print("RegimeConfirmBars=", RegimeConfirmBars);
+   Print("RegimeSwitchThreshold=", RegimeSwitchThreshold);
+   Print("RegimeHoldBars=", RegimeHoldBars);
+   Print("InputSource=", RegimeInputSourceText);
+   Print(APP_NAME, " ", APP_VERSION, " started.");
+   RunEngineCycle(false);
+   Print("----------------------------------------");
+   Print("TRE RUNTIME STATE");
+   Print("----------------------------------------");
+   Print("MarketDetectionStatus=",
+         MarketDetectionStatusText);
+   Print("AutoProfileSwitchStatus=",
+         AutoProfileSwitchStatusText);
+   Print("ProfileSource=", RegimeProfileSourceText);
+   Print("ResearchMode=", RegimeResearchModeText);
+   Print("DetectedRegime=", DetectedRegimeText);
+   Print("ActiveRegime=", ActiveRegimeText);
+   Print("RegimeSwitchStatus=", RegimeSwitchStatusText);
+   Print("RegimeBlockingReason=", RegimeBlockingReasonText);
+   return(INIT_SUCCEEDED);
+}
+
+void OnTick()
+{
+   RunEngineCycle(true);
+}
+
+void OnTimer()
+{
+   // Timer refresh never sends orders. Backtest execution is tick-driven only.
+   RunEngineCycle(false);
+}
+
+void OnDeinit(const int reason)
+{
+   EventKillTimer();
+   JournalFinalize(GetTradeSymbol());
+   ZoneReleaseATRHandle();
+   RegimeReleaseIndicatorHandles();
+   ClearTREObjects();
+   Comment("");
+   Print(APP_NAME, " ", APP_VERSION, " stopped.");
+}
+
+double OnTester()
+{
+   JournalFinalize(GetTradeSymbol());
+   return 0.0;
+}
+
+void OnChartEvent(const int id,
+                  const long &lparam,
+                  const double &dparam,
+                  const string &sparam)
+{
+   DashboardHandleChartEvent(id, sparam);
+}
