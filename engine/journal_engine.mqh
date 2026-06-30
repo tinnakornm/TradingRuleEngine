@@ -168,8 +168,11 @@ void JournalWriteSignalHeader()
       "PendingSwingLowRightBarsRequired|UsePressureGuard|" +
       "PressureGuardMode|PressureDirection|PressureLevel|" +
       "PressureScore|BullishPressureScore|BearishPressureScore|" +
-      "PressureAction|BlockedDirection|PressureReason|" +
-      "CandidateDirectionBeforePressure|DecisionAfterPressure";
+      "PressureAction|PressureBlockedDirection|PressureReason|" +
+      "CandidateDirectionBeforePressure|DecisionBeforePressure|" +
+      "ScoreBeforePressure|PressurePenaltyApplied|ScoreAfterPressure|" +
+      "DecisionAfterPressure|PressureDecisionImpact|" +
+      "PressureScopeAllowed";
    StringSplit(names, '|', fields);
    JournalWriteCSVRow(fields);
 }
@@ -363,6 +366,17 @@ void JournalWriteParameters()
              PressureMediumThreshold);
    FileWrite(TREJournalHandle, "PARAMETER", "PressureHighThreshold",
              PressureHighThreshold);
+   FileWrite(TREJournalHandle, "PARAMETER", "PressureMediumPenalty",
+             PressureMediumPenalty);
+   FileWrite(TREJournalHandle, "PARAMETER", "PressureHighPenalty",
+             PressureHighPenalty);
+   FileWrite(TREJournalHandle, "PARAMETER",
+             "PressureHighDowngradeToWatch",
+             JournalBoolText(PressureHighDowngradeToWatch));
+   FileWrite(TREJournalHandle, "PARAMETER",
+             "PressureSoftBlockOnlyInSidewayOrUnknown",
+             JournalBoolText(
+                PressureSoftBlockOnlyInSidewayOrUnknown));
    FileWrite(TREJournalHandle, "PARAMETER", "DetectedRegime",
              DetectedRegimeText);
    FileWrite(TREJournalHandle, "PARAMETER", "ActiveRegime",
@@ -631,8 +645,14 @@ void JournalWriteSignalRow(string symbol,
    JournalAddCSVField(fields, PressureActionText);
    JournalAddCSVField(fields, PressureBlockedDirectionText);
    JournalAddCSVField(fields, PressureReasonText);
-   JournalAddCSVField(fields, PressureCandidateDirectionText);
-   JournalAddCSVField(fields, PressureAfterDecisionText);
+   JournalAddCSVField(fields, CandidateDirectionBeforePressure);
+   JournalAddCSVField(fields, DecisionBeforePressure);
+   JournalAddCSVField(fields, IntegerToString(ScoreBeforePressure));
+   JournalAddCSVField(fields, IntegerToString(PressurePenaltyApplied));
+   JournalAddCSVField(fields, IntegerToString(ScoreAfterPressure));
+   JournalAddCSVField(fields, DecisionAfterPressure);
+   JournalAddCSVField(fields, PressureDecisionImpactText);
+   JournalAddCSVField(fields, JournalBoolText(PressureScopeAllowed));
    JournalWriteCSVRow(fields);
 }
 
@@ -647,8 +667,7 @@ void JournalLogSignal(string symbol)
                           (DirectionalFilterCandidateAction == ACTION_BUY_READY ||
                            DirectionalFilterCandidateAction == ACTION_SELL_READY));
    bool pressureGuardedSignal =
-      ((PressureGuardStatusText == "BLOCKED" ||
-        PressureGuardStatusText == "DOWNGRADED") &&
+      ((PressureDecisionImpact != PRESSURE_IMPACT_NONE) &&
        (PressureCandidateAction == ACTION_BUY_READY ||
         PressureCandidateAction == ACTION_SELL_READY));
 

@@ -21,21 +21,42 @@ string PressureLevelToText(TRE_PRESSURE_LEVEL level)
 
 string PressureActionToText(TRE_PRESSURE_ACTION action)
 {
-   if(action == PRESSURE_DOWNGRADE_TO_WATCH)
-      return "DOWNGRADE_TO_WATCH";
-   if(action == PRESSURE_BLOCK_BUY)
-      return "BLOCK_BUY";
-   if(action == PRESSURE_BLOCK_SELL)
-      return "BLOCK_SELL";
+   if(action == PRESSURE_WARN) return "WARN";
+   if(action == PRESSURE_SOFT_REDUCE_SCORE)
+      return "SOFT_REDUCE_SCORE";
+   if(action == PRESSURE_SOFT_DOWNGRADE_TO_WATCH)
+      return "SOFT_DOWNGRADE_TO_WATCH";
+   if(action == PRESSURE_HARD_BLOCK_BUY)
+      return "HARD_BLOCK_BUY";
+   if(action == PRESSURE_HARD_BLOCK_SELL)
+      return "HARD_BLOCK_SELL";
    return "ALLOW";
 }
 
 string PressureGuardModeToText(TRE_PRESSURE_GUARD_MODE mode)
 {
+   if(mode == PRESSURE_GUARD_DISPLAY_ONLY) return "DISPLAY_ONLY";
    if(mode == PRESSURE_GUARD_WARN_ONLY) return "WARN_ONLY";
-   if(mode == PRESSURE_GUARD_DOWNGRADE) return "DOWNGRADE";
-   if(mode == PRESSURE_GUARD_BLOCK) return "BLOCK";
+   if(mode == PRESSURE_GUARD_SOFT_BLOCK) return "SOFT_BLOCK";
+   if(mode == PRESSURE_GUARD_HARD_BLOCK) return "HARD_BLOCK";
    return "OFF";
+}
+
+string PressureDecisionImpactToText(TRE_PRESSURE_DECISION_IMPACT impact)
+{
+   if(impact == PRESSURE_IMPACT_WARNING_ONLY) return "WARNING_ONLY";
+   if(impact == PRESSURE_IMPACT_SCORE_REDUCED) return "SCORE_REDUCED";
+   if(impact == PRESSURE_IMPACT_DOWNGRADED_TO_WATCH)
+      return "DOWNGRADED_TO_WATCH";
+   if(impact == PRESSURE_IMPACT_HARD_BLOCKED) return "HARD_BLOCKED";
+   return "NONE";
+}
+
+string PressureDirectionAdjective()
+{
+   if(PressureDirection == PRESSURE_UP) return "Bullish";
+   if(PressureDirection == PRESSURE_DOWN) return "Bearish";
+   return "Neutral";
 }
 
 bool PressureEMAAtShift(MqlRates &rates[],
@@ -91,6 +112,7 @@ void PressureResetOutput()
    PressureDirection = PRESSURE_NONE;
    PressureLevel = PRESSURE_LOW;
    PressureAction = PRESSURE_ALLOW;
+   PressureDecisionImpact = PRESSURE_IMPACT_NONE;
    PressureCandidateAction = ACTION_WAIT;
    PressureDirectionText = "NONE";
    PressureLevelText = "LOW";
@@ -100,15 +122,26 @@ void PressureResetOutput()
    PressureMissingConditionText = "N/A";
    PressureAppliesToCandidateText = "NO";
    PressureGuardStatusText = UsePressureGuard ? "READY" : "DISABLED";
-   PressureCandidateDirectionText = "NONE";
-   PressureCandidateRegimeText = ActiveRegimeText;
-   PressureBeforeDecisionText = "WAIT";
-   PressureAfterDecisionText = "WAIT";
+   CandidateDirectionBeforePressure = "NONE";
+   DecisionBeforePressure = "WAIT";
+   DecisionAfterPressure = "WAIT";
+   PressureDecisionImpactText = "NONE";
+   RegimeUsedForPressureScopeText =
+      (ActiveRegime != TRE_PROFILE_UNKNOWN)
+      ? ActiveRegimeText
+      : DetectedRegimeText;
+   PressureScopeAllowed = true;
+   PressureScopeAllowedText = "YES";
+   ScoreBeforePressure = 0;
+   PressurePenaltyApplied = 0;
+   ScoreAfterPressure = 0;
    PressureDowngradeReasonText = "N/A";
    PressureBlockReasonText = "N/A";
    PressureMomentumDirectionText = "NEUTRAL";
    PressureEMAValueText = "N/A";
+   PressureEMAPreviousValueText = "N/A";
    PressureEMASlopePointsText = "N/A";
+   PressureDistanceFromEMAPointsText = "N/A";
    PressurePriceAboveEMAText = "N/A";
    PressurePriceBelowEMAText = "N/A";
    PressureEMASlopeDirectionText = "N/A";
@@ -116,6 +149,8 @@ void PressureResetOutput()
    PressureLastHighText = "N/A";
    PressureLastLowText = "N/A";
    PressureEffectiveTFText = TimeframeToText(EffectivePressureTF);
+   PressureCalculationStatusText = "NOT CALCULATED";
+   MissingPressureDataReasonText = "N/A";
    PressureScore = 0;
    BullishPressureScore = 0;
    BearishPressureScore = 0;
@@ -138,6 +173,7 @@ void PressureGuardEngine(string symbol)
       PressureGuardMode == PRESSURE_GUARD_OFF)
    {
       PressureGuardStatusText = "DISABLED";
+      PressureCalculationStatusText = "SKIPPED";
       PressureReasonText = "Pressure Guard is disabled";
       return;
    }
@@ -159,8 +195,10 @@ void PressureGuardEngine(string symbol)
    if(PressureBarsCopied <= EffectivePressureLookbackBars + 1)
    {
       PressureGuardStatusText = "NO_DATA";
+      PressureCalculationStatusText = "NO_DATA";
       PressureReasonText = "PressureTF history is incomplete";
       PressureMissingConditionText = "Need more PressureTF bars";
+      MissingPressureDataReasonText = PressureMissingConditionText;
       return;
    }
 
@@ -231,10 +269,12 @@ void PressureGuardEngine(string symbol)
          emaSlopeUp = (emaCurrent > emaPrevious);
          emaSlopeDown = (emaCurrent < emaPrevious);
          PressureEMAValueText = DoubleToString(emaCurrent, digits);
+         PressureEMAPreviousValueText =
+            DoubleToString(emaPrevious, digits);
          PressurePriceAboveEMAText =
-            priceAboveEMA ? "YES" : "NO";
+            priceAboveEMA ? TRE_STATUS_PASS : TRE_STATUS_FAIL;
          PressurePriceBelowEMAText =
-            priceBelowEMA ? "YES" : "NO";
+            priceBelowEMA ? TRE_STATUS_PASS : TRE_STATUS_FAIL;
          PressureEMASlopeDirectionText =
             emaSlopeUp ? "UP" : (emaSlopeDown ? "DOWN" : "FLAT");
 
@@ -242,7 +282,17 @@ void PressureGuardEngine(string symbol)
          {
             PressureEMASlopePointsText =
                DoubleToString((emaCurrent - emaPrevious) / point, 1);
+            PressureDistanceFromEMAPointsText =
+               DoubleToString((rates[1].close - emaCurrent) / point, 1);
          }
+      }
+      else
+      {
+         PressurePriceAboveEMAText = TRE_STATUS_WAIT;
+         PressurePriceBelowEMAText = TRE_STATUS_WAIT;
+         PressureEMASlopeDirectionText = TRE_STATUS_WAIT;
+         MissingPressureDataReasonText =
+            "EMA evidence is not ready";
       }
    }
 
@@ -353,38 +403,46 @@ void PressureGuardEngine(string symbol)
       IntegerToString(PressureScore) + "/100 (" +
       PressureLevelText + ")";
    PressureGuardStatusText = "READY";
+   PressureCalculationStatusText = "CALCULATED";
 }
 
-bool PressureGuardScopeAllows()
+bool PressureSoftBlockScopeAllows()
 {
-   if(!PressureBlockOnlyInSidewayOrUnknown)
+   if(!PressureSoftBlockOnlyInSidewayOrUnknown)
       return true;
 
    if(ActiveRegime == TRE_PROFILE_UPTREND ||
-      ActiveRegime == TRE_PROFILE_DOWNTREND)
+      ActiveRegime == TRE_PROFILE_DOWNTREND ||
+      DetectedRegime == TRE_PROFILE_UPTREND ||
+      DetectedRegime == TRE_PROFILE_DOWNTREND)
    {
       return false;
    }
 
-   bool activeInScope =
-      (ActiveRegime == TRE_PROFILE_SIDEWAY ||
-       ActiveRegime == TRE_PROFILE_UNKNOWN);
-   bool detectedInScope =
-      (DetectedRegime == TRE_PROFILE_SIDEWAY ||
-       DetectedRegime == TRE_PROFILE_UNKNOWN);
-   return (activeInScope || detectedInScope);
+   return true;
 }
 
-ENTRY_ACTION PressureGuardApply(ENTRY_ACTION candidate)
+ENTRY_ACTION PressureGuardApply(ENTRY_ACTION candidate,
+                                int candidateScore)
 {
    PressureCandidateAction = candidate;
-   PressureCandidateDirectionText =
+   CandidateDirectionBeforePressure =
       (candidate == ACTION_BUY_READY)
       ? "BUY"
       : ((candidate == ACTION_SELL_READY) ? "SELL" : "NONE");
-   PressureBeforeDecisionText = ActionToText(candidate);
-   PressureAfterDecisionText = PressureBeforeDecisionText;
-   PressureCandidateRegimeText = ActiveRegimeText;
+   DecisionBeforePressure = ActionToText(candidate);
+   DecisionAfterPressure = DecisionBeforePressure;
+   ScoreBeforePressure = candidateScore;
+   ScoreAfterPressure = candidateScore;
+   PressurePenaltyApplied = 0;
+   PressureDecisionImpact = PRESSURE_IMPACT_NONE;
+   PressureDecisionImpactText = "NONE";
+   RegimeUsedForPressureScopeText =
+      (ActiveRegime != TRE_PROFILE_UNKNOWN)
+      ? ActiveRegimeText
+      : DetectedRegimeText;
+   PressureScopeAllowed = PressureSoftBlockScopeAllows();
+   PressureScopeAllowedText = PressureScopeAllowed ? "YES" : "NO";
 
    if(candidate != ACTION_BUY_READY &&
       candidate != ACTION_SELL_READY)
@@ -400,14 +458,6 @@ ENTRY_ACTION PressureGuardApply(ENTRY_ACTION candidate)
       return candidate;
    }
 
-   if(!PressureGuardScopeAllows())
-   {
-      PressureGuardStatusText = "OUT_OF_SCOPE";
-      PressureReasonText =
-         "Confirmed directional regime is outside guard scope";
-      return candidate;
-   }
-
    bool opposing =
       (candidate == ACTION_BUY_READY &&
        PressureDirection == PRESSURE_DOWN) ||
@@ -417,6 +467,10 @@ ENTRY_ACTION PressureGuardApply(ENTRY_ACTION candidate)
    if(!opposing || PressureLevel == PRESSURE_LOW)
    {
       PressureGuardStatusText = "ALLOW";
+      PressureReasonText =
+         PressureDirectionAdjective() + " pressure is " +
+         PressureLevelText + ", allowing " +
+         CandidateDirectionBeforePressure + ".";
       return candidate;
    }
 
@@ -424,41 +478,100 @@ ENTRY_ACTION PressureGuardApply(ENTRY_ACTION candidate)
    PressureBlockedDirectionText =
       (candidate == ACTION_BUY_READY) ? "BUY" : "SELL";
    PressureMissingConditionText =
-      PressureBlockedDirectionText + " conflicts with " +
-      PressureDirectionText + " pressure";
+      "Opposing " + PressureDirectionText + " " +
+      PressureLevelText + " pressure against " +
+      PressureBlockedDirectionText;
 
-   if(PressureGuardMode == PRESSURE_GUARD_WARN_ONLY)
+   if(PressureGuardMode == PRESSURE_GUARD_DISPLAY_ONLY)
    {
-      PressureGuardStatusText = "WARNING";
+      PressureGuardStatusText = "DISPLAY_ONLY";
       PressureReasonText =
-         "Warning only: " + PressureMissingConditionText;
+         PressureDirectionAdjective() + " pressure is " +
+         PressureLevelText + " against " +
+         PressureBlockedDirectionText +
+         ", display only.";
       return candidate;
    }
 
-   if(PressureLevel == PRESSURE_MEDIUM ||
-      PressureGuardMode == PRESSURE_GUARD_DOWNGRADE)
+   if(PressureGuardMode == PRESSURE_GUARD_WARN_ONLY)
    {
-      PressureAction = PRESSURE_DOWNGRADE_TO_WATCH;
+      PressureAction = PRESSURE_WARN;
       PressureActionText = PressureActionToText(PressureAction);
-      PressureDowngradeReasonText = PressureMissingConditionText;
+      PressureDecisionImpact = PRESSURE_IMPACT_WARNING_ONLY;
+      PressureDecisionImpactText =
+         PressureDecisionImpactToText(PressureDecisionImpact);
+      PressureGuardStatusText = "WARNING";
       PressureReasonText =
-         "Pressure Guard downgraded " +
-         PressureBlockedDirectionText + " to WATCH";
-      PressureAfterDecisionText = ActionToText(ACTION_WATCH);
-      PressureGuardStatusText = "DOWNGRADED";
-      return ACTION_WATCH;
+         PressureDirectionAdjective() + " pressure is " +
+         PressureLevelText + " against " +
+         PressureBlockedDirectionText + ", warning only.";
+      return candidate;
+   }
+
+   if(PressureGuardMode == PRESSURE_GUARD_SOFT_BLOCK)
+   {
+      if(!PressureScopeAllowed)
+      {
+         PressureGuardStatusText = "OUT_OF_SCOPE";
+         PressureReasonText =
+            "Confirmed directional regime is outside soft-block scope.";
+         return candidate;
+      }
+
+      PressurePenaltyApplied =
+         (PressureLevel == PRESSURE_HIGH)
+         ? EffectivePressureHighPenalty
+         : EffectivePressureMediumPenalty;
+      ScoreAfterPressure =
+         (int)MathMax(0, candidateScore - PressurePenaltyApplied);
+
+      if(PressureLevel == PRESSURE_HIGH &&
+         PressureHighDowngradeToWatch)
+      {
+         PressureAction = PRESSURE_SOFT_DOWNGRADE_TO_WATCH;
+         PressureDecisionImpact =
+            PRESSURE_IMPACT_DOWNGRADED_TO_WATCH;
+         DecisionAfterPressure = ActionToText(ACTION_WATCH);
+         PressureDowngradeReasonText = PressureMissingConditionText;
+         PressureReasonText =
+            PressureDirectionAdjective() + " pressure is HIGH against " +
+            PressureBlockedDirectionText + ", downgrading " +
+            DecisionBeforePressure + " to WATCH.";
+         PressureGuardStatusText = "DOWNGRADED";
+         PressureActionText = PressureActionToText(PressureAction);
+         PressureDecisionImpactText =
+            PressureDecisionImpactToText(PressureDecisionImpact);
+         return ACTION_WATCH;
+      }
+
+      PressureAction = PRESSURE_SOFT_REDUCE_SCORE;
+      PressureDecisionImpact = PRESSURE_IMPACT_SCORE_REDUCED;
+      PressureReasonText =
+         PressureDirectionAdjective() + " pressure is " +
+         PressureLevelText + " against " +
+         PressureBlockedDirectionText + ", reducing score by " +
+         IntegerToString(PressurePenaltyApplied) + ".";
+      PressureGuardStatusText = "SCORE_REDUCED";
+      PressureActionText = PressureActionToText(PressureAction);
+      PressureDecisionImpactText =
+         PressureDecisionImpactToText(PressureDecisionImpact);
+      return candidate;
    }
 
    PressureAction =
       (candidate == ACTION_BUY_READY)
-      ? PRESSURE_BLOCK_BUY
-      : PRESSURE_BLOCK_SELL;
+      ? PRESSURE_HARD_BLOCK_BUY
+      : PRESSURE_HARD_BLOCK_SELL;
+   PressureDecisionImpact = PRESSURE_IMPACT_HARD_BLOCKED;
    PressureActionText = PressureActionToText(PressureAction);
+   PressureDecisionImpactText =
+      PressureDecisionImpactToText(PressureDecisionImpact);
    PressureBlockReasonText = PressureMissingConditionText;
    PressureReasonText =
-      "Pressure Guard blocked " + PressureBlockedDirectionText +
-      " due to opposing HIGH pressure";
-   PressureAfterDecisionText = ActionToText(ACTION_NO_TRADE);
+      PressureDirectionAdjective() + " pressure is " +
+      PressureLevelText + " against " +
+      PressureBlockedDirectionText + ", hard blocking the candidate.";
+   DecisionAfterPressure = ActionToText(ACTION_NO_TRADE);
    PressureGuardStatusText = "BLOCKED";
    return ACTION_NO_TRADE;
 }

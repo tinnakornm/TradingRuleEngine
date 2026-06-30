@@ -5,13 +5,14 @@
 #ifndef TRE_DASHBOARD_ENGINE_MQH
 #define TRE_DASHBOARD_ENGINE_MQH
 
-#define TRE_DASH_TAB_COUNT 11
-#define TRE_DASH_MAX_LINES 72
-#define TRE_SUMMARY_SUBTAB_COUNT 3
+#define TRE_DASH_TAB_COUNT 12
+#define TRE_DASH_MAX_LINES 96
+#define TRE_SUMMARY_SUBTAB_COUNT 5
 #define TRE_STRUCTURE_SUBTAB_COUNT 5
-#define TRE_PRESSURE_SUBTAB_COUNT 4
+#define TRE_PRESSURE_SUBTAB_COUNT 1
 #define TRE_DECISION_SUBTAB_COUNT 8
 #define TRE_TRADE_SUBTAB_COUNT 3
+#define TRE_RESEARCH_SUBTAB_COUNT 5
 #define TRE_SUMMARY_CARD_COUNT 11
 #define TRE_DASH_CONTENT_X 170
 
@@ -39,6 +40,14 @@ string DashboardIndexOrNA(int value)
    return IntegerToString(value);
 }
 
+string DashboardCountPercentage(int count, int total)
+{
+   double percentage =
+      (total > 0) ? (100.0 * (double)count / (double)total) : 0;
+   return IntegerToString(count) + " (" +
+          DoubleToString(percentage, 1) + "%)";
+}
+
 string DashboardTabName(int tab)
 {
    if(tab == 0) return "Summary";
@@ -51,7 +60,8 @@ string DashboardTabName(int tab)
    if(tab == 7) return "Decision";
    if(tab == 8) return "Trade";
    if(tab == 9) return "Performance";
-   if(tab == 10) return "Debug";
+   if(tab == 10) return "Research";
+   if(tab == 11) return "Debug";
 
    return "Summary";
 }
@@ -69,7 +79,9 @@ string SummarySubTabName(int tab)
 {
    if(tab == 0) return "Overview";
    if(tab == 1) return "Scores";
-   if(tab == 2) return "Details";
+   if(tab == 2) return "Execution";
+   if(tab == 3) return "Research";
+   if(tab == 4) return "Diagnostics";
 
    return "Overview";
 }
@@ -87,12 +99,17 @@ string StructureSubTabName(int tab)
 
 string PressureSubTabName(int tab)
 {
-   if(tab == 0) return "Overview";
-   if(tab == 1) return "Evidence";
-   if(tab == 2) return "Decision";
-   if(tab == 3) return "Debug";
+   return "Current";
+}
 
-   return "Overview";
+string ResearchSubTabName(int tab)
+{
+   if(tab == 0) return "Experiment";
+   if(tab == 1) return "Trade";
+   if(tab == 2) return "Pressure";
+   if(tab == 3) return "Validation";
+   if(tab == 4) return "Episode";
+   return "Experiment";
 }
 
 string DecisionSubTabName(int tab)
@@ -214,7 +231,7 @@ int DashboardPanelHeight()
    {
       if(ActiveSummarySubTab == 0) return 430;
       if(ActiveSummarySubTab == 1) return 420;
-      return RegimeDetectionWarningActive ? 820 : 700;
+      return RegimeDetectionWarningActive ? 900 : 820;
    }
 
    if(ActiveDashboardTab == 1) return 820;
@@ -230,10 +247,7 @@ int DashboardPanelHeight()
    if(ActiveDashboardTab == 4) return 360;
    if(ActiveDashboardTab == 5) return 360;
    if(ActiveDashboardTab == 6)
-   {
-      if(ActivePressureSubTab == 1) return 520;
-      return 430;
-   }
+      return 360;
    if(ActiveDashboardTab == 7)
    {
       if(ActiveDecisionSubTab == 1 &&
@@ -246,7 +260,8 @@ int DashboardPanelHeight()
    }
    if(ActiveDashboardTab == 8) return 720;
    if(ActiveDashboardTab == 9) return 360;
-   return 960;
+   if(ActiveDashboardTab == 10) return 620;
+   return 1480;
 }
 
 void DashboardDrawText(string name, int x, int y, string text, color clr, int fontSize = 9)
@@ -453,6 +468,18 @@ void DashboardPollButtonState()
       ObjectSetInteger(0, name, OBJPROP_STATE, false);
       return;
    }
+
+   for(int tab = 0; tab < TRE_RESEARCH_SUBTAB_COUNT; tab++)
+   {
+      string name = "TRE_RESEARCH_SUBTAB_" + IntegerToString(tab);
+
+      if(!DashboardButtonPressed(name))
+         continue;
+
+      ActiveResearchSubTab = tab;
+      ObjectSetInteger(0, name, OBJPROP_STATE, false);
+      return;
+   }
 }
 
 void DashboardDrawTopSubButton(string prefix,
@@ -649,7 +676,15 @@ void DashboardCleanupLegacyObjects()
 void DashboardRenderTabs()
 {
    for(int tab = 0; tab < TRE_DASH_TAB_COUNT; tab++)
+   {
+      if(tab == 10 && !UseResearchDB)
+      {
+         DashboardDeleteObjectByName(
+            "TRE_DASH_TAB_" + IntegerToString(tab));
+         continue;
+      }
       DashboardDrawButton(tab);
+   }
 }
 
 void DashboardRenderSummarySubTabs()
@@ -694,6 +729,15 @@ void DashboardRenderTradeSubTabs()
       DashboardDrawTradeSubButton(tab);
 }
 
+void DashboardRenderResearchSubTabs()
+{
+   for(int tab = 0; tab < TRE_RESEARCH_SUBTAB_COUNT; tab++)
+      DashboardDrawTopSubButton("TRE_RESEARCH_SUBTAB_",
+                                tab,
+                                ActiveResearchSubTab,
+                                ResearchSubTabName(tab));
+}
+
 void DashboardHideSummarySubTabs()
 {
    for(int tab = 0; tab < TRE_SUMMARY_SUBTAB_COUNT; tab++)
@@ -733,6 +777,13 @@ void DashboardHideTradeSubTabs()
    }
 }
 
+void DashboardHideResearchSubTabs()
+{
+   for(int tab = 0; tab < TRE_RESEARCH_SUBTAB_COUNT; tab++)
+      DashboardDeleteObjectByName(
+         "TRE_RESEARCH_SUBTAB_" + IntegerToString(tab));
+}
+
 void DashboardHidePanelObjects()
 {
    DashboardDeleteObjectByName("TRE_DASHBOARD_BG");
@@ -744,6 +795,7 @@ void DashboardHidePanelObjects()
    DashboardHidePressureSubTabs();
    DashboardHideDecisionSubTabs();
    DashboardHideTradeSubTabs();
+   DashboardHideResearchSubTabs();
 
    for(int tab = 0; tab < TRE_DASH_TAB_COUNT; tab++)
       DashboardDeleteObjectByName("TRE_DASH_TAB_" + IntegerToString(tab));
@@ -764,7 +816,7 @@ void DashboardRenderSummaryCards()
    DashboardDrawSummaryCard(7, "MARGIN LEVEL", AccountMarginLevelText, AccountMarginStatusText, MarginLevelColor());
    DashboardDrawSummaryCard(8, "EXECUTION LOT", ExecutionLotSummaryValueText, ExecutionLotSummaryReasonText, ExecutionLotColor());
    DashboardDrawSummaryCard(9, "SCORE MIX", EngineScoreTotalText, DashboardShortText(EngineScoreMixCompactText, 34), DashboardStatusColor(TotalEngineStatusText));
-   DashboardDrawSummaryCard(10, "PRESSURE", PressureDirectionText + " / " + PressureLevelText, DashboardShortText(PressureActionText + " | " + PressureBlockedDirectionText, 34), (PressureGuardStatusText == "BLOCKED") ? clrRed : ((PressureGuardStatusText == "DOWNGRADED" || PressureGuardStatusText == "WARNING") ? clrGoldenrod : clrSeaGreen));
+   DashboardDrawSummaryCard(10, "PRESSURE", PressureDirectionText + " / " + PressureLevelText, DashboardShortText(PressureActionText + " | " + PressureBlockedDirectionText, 34), (PressureGuardStatusText == "BLOCKED") ? clrRed : ((PressureGuardStatusText == "DOWNGRADED" || PressureGuardStatusText == "SCORE_REDUCED" || PressureGuardStatusText == "WARNING") ? clrGoldenrod : clrSeaGreen));
 }
 
 void RenderSummaryTab(string symbol)
@@ -807,48 +859,75 @@ void RenderSummaryTab(string symbol)
       return;
    }
 
-   DashboardAddHeader(row, "[SUMMARY DETAILS]");
-   DashboardAddLine(row, "Research Mode        : ", RegimeResearchModeText);
-   DashboardAddLine(row, "Input Source         : ", RegimeInputSourceText);
-   DashboardAddLine(row, "Market Bias          : ", BiasToText(MarketBias), BiasColor(MarketBias));
-   DashboardAddLine(row, "Bias Ignored         : ", ResearchBiasIgnoredText,
-                    (ResearchBiasIgnoredText == "YES") ? clrGoldenrod : clrGray);
-   DashboardAddLine(row, "Decision Source      : ", ResearchSummaryDecisionSourceText);
-   DashboardAddLine(row, "Research Warning     : ", ResearchWarningText,
-                    (ResearchWarningText == "N/A") ? clrGray : clrGoldenrod);
-   DashboardAddLine(row, "Manual Profile       : ", ManualMarketProfileText);
-   DashboardAddLine(row, "Detected Regime      : ", DetectedRegimeText);
-   DashboardAddLine(row, "Best Candidate Regime: ", RegimeBestCandidateText);
-   DashboardAddLine(row, "Active Regime        : ", ActiveRegimeText, MarketRegimeColor());
-   DashboardAddLine(row, "Regime Confidence    : ", RegimeConfidenceText);
-   DashboardAddLine(row, "Market Detection Status: ", MarketDetectionStatusText);
-   DashboardAddLine(row, "Auto Profile Switch Status: ", AutoProfileSwitchStatusText);
-   DashboardAddLine(row, "Profile Source       : ", RegimeProfileSourceText);
-   DashboardAddLine(row, "Regime Switch Status : ", RegimeSwitchStatusText);
-   DashboardAddLine(row, "Regime Blocking Reason: ", RegimeBlockingReasonText);
-   DashboardAddLine(row, "Pressure             : ", PressureDirectionText + " / " + PressureLevelText);
-   DashboardAddLine(row, "Pressure Action      : ", PressureActionText);
-   DashboardAddLine(row, "Pressure Blocked Dir : ", PressureBlockedDirectionText);
-   DashboardAddLine(row, "Pressure Reason      : ", PressureReasonText);
-   DashboardAddRegimeDetectionWarning(row);
-   DashboardAddLine(row, "Directional Filter   : ", DirectionalFilterEnabledText);
-   DashboardAddLine(row, "Allowed Direction    : ", DirectionalFilterAllowedDirectionText);
-   DashboardAddLine(row, "Blocked Direction    : ", DirectionalFilterBlockedDirectionText);
-   DashboardAddLine(row, "Zone / Strength      : ", IntegerToString(CurrentZone) + " / " + ZoneStrengthText);
-   DashboardAddLine(row, "Risk Level           : ", RiskLevelText);
-   DashboardAddLine(row, "Margin Level         : ", AccountMarginLevelText + " / " + AccountMarginStatusText, MarginLevelColor());
-   DashboardAddLine(row, "Bias Reason          : ", TrendBiasReasonText);
-   DashboardAddLine(row, "Blocking Factor      : ", TrendBlockingFactorText, (TrendBlockingFactorText == "N/A") ? clrGreen : clrGoldenrod);
-   DashboardAddLine(row, "Execution Mode       : ", ExecutionModeText);
-   DashboardAddLine(row, "Execution Allowed    : ", ExecutionAllowedText, ExecutionStatusColor());
-   DashboardAddLine(row, "Requested / Actual Lot: ", ExecutionLotSummaryValueText + " | " + ExecutionLotSummaryReasonText, ExecutionLotColor());
-   DashboardAddLine(row, "Runtime              : ", ExecutionRuntimeText);
-   DashboardAddLine(row, "Last Execution       : ", LastExecutionAction, ExecutionStatusColor());
-   DashboardAddLine(row, "Execution Reason     : ", LastExecutionReason, ExecutionStatusColor());
-   DashboardAddLine(row, "Trade Management     : ", TradeManagementSummaryText);
-   DashboardAddLine(row, "Entry Reason         : ", EntryReason, ActionColor(ActionState));
-   DashboardAddLine(row, "Missing Condition    : ", MissingConditionText, clrGoldenrod);
-   DashboardAddLine(row, "Symbol               : ", symbol);
+   if(ActiveSummarySubTab == 2)
+   {
+      DashboardAddHeader(row, "[EXECUTION]");
+      DashboardAddLine(row, "Decision              : ",
+                       ActionToText(ActionState), ActionColor(ActionState));
+      DashboardAddLine(row, "Execution Mode        : ", ExecutionModeText);
+      DashboardAddLine(row, "Execution Allowed     : ",
+                       ExecutionAllowedText, ExecutionStatusColor());
+      DashboardAddLine(row, "Requested / Actual Lot: ",
+                       ExecutionLotSummaryValueText + " | " +
+                       ExecutionLotSummaryReasonText,
+                       ExecutionLotColor());
+      DashboardAddLine(row, "Last Execution        : ",
+                       LastExecutionAction, ExecutionStatusColor());
+      DashboardAddLine(row, "Execution Reason      : ",
+                       LastExecutionReason, ExecutionStatusColor());
+      DashboardAddLine(row, "Trade Management      : ",
+                       TradeManagementSummaryText);
+      DashboardAddLine(row, "Open Positions        : ",
+                       IntegerToString(TradePositionCount));
+      DashboardAddLine(row, "Pending Orders        : ",
+                       IntegerToString(TradePendingCount));
+   }
+   else if(ActiveSummarySubTab == 3)
+   {
+      DashboardAddHeader(row, "[RESEARCH]");
+      DashboardAddLine(row, "Research DB Enabled   : ",
+                       UseResearchDB ? "YES" : "NO");
+      DashboardAddLine(row, "Experiment ID         : ",
+                       IntegerToString(ResearchDBExperimentID));
+      DashboardAddLine(row, "Signals               : ",
+                       IntegerToString(ResearchDBDiagnosticSignalCount));
+      DashboardAddLine(row, "Executed Trades       : ",
+                       IntegerToString(
+                          ResearchDBDiagnosticExecutedTradeCount));
+      DashboardAddLine(row, "Blocked Signals       : ",
+                       IntegerToString(
+                          ResearchDBDiagnosticBlockedSignalCount));
+      DashboardAddLine(row, "Net Profit            : ",
+                       DoubleToString(ResearchAnalyticsNetProfit, 2),
+                       ProfitColor(ResearchAnalyticsNetProfit));
+      DashboardAddLine(row, "Validation            : ",
+                       ResearchDBDiagnosticValidationStatus);
+      DashboardAddLine(row, "Open Research tab for detailed analytics",
+                       "");
+   }
+   else
+   {
+      DashboardAddHeader(row, "[DIAGNOSTICS]");
+      DashboardAddLine(row, "Market Detection      : ",
+                       MarketDetectionStatusText);
+      DashboardAddLine(row, "Regime Switch         : ",
+                       RegimeSwitchStatusText);
+      DashboardAddLine(row, "Regime Blocking       : ",
+                       RegimeBlockingReasonText);
+      DashboardAddLine(row, "Pressure Calculation  : ",
+                       PressureCalculationStatusText);
+      DashboardAddLine(row, "Research DB Status    : ",
+                       ResearchDBStatusText);
+      DashboardAddLine(row, "DB Last Error         : ",
+                       ResearchDBLastErrorText);
+      DashboardAddLine(row, "Attribution Errors    : ",
+                       IntegerToString(
+                          ResearchDBDiagnosticAttributionErrorCount));
+      DashboardAddLine(row, "Orphan Trades         : ",
+                       IntegerToString(
+                          ResearchDBDiagnosticOrphanTradeCount));
+      DashboardAddRegimeDetectionWarning(row);
+   }
 
    DashboardClearUnusedLines(row);
 }
@@ -1106,66 +1185,22 @@ void RenderPressureTab()
    int row = 0;
    DashboardRenderPressureSubTabs();
 
-   if(ActivePressureSubTab == 0)
-   {
-      DashboardAddHeader(row, "[PRESSURE GUARD OVERVIEW]");
-      DashboardAddLine(row, "Use Pressure Guard    : ", UsePressureGuard ? "ON" : "OFF");
-      DashboardAddLine(row, "Guard Mode            : ", PressureGuardModeToText(PressureGuardMode));
-      DashboardAddLine(row, "Pressure Direction    : ", PressureDirectionText);
-      DashboardAddLine(row, "Pressure Level        : ", PressureLevelText);
-      DashboardAddLine(row, "Pressure Score        : ", IntegerToString(PressureScore) + " / 100");
-      DashboardAddLine(row, "Pressure Action       : ", PressureActionText);
-      DashboardAddLine(row, "Blocked Direction     : ", PressureBlockedDirectionText);
-      DashboardAddLine(row, "Pressure Reason       : ", PressureReasonText);
-      DashboardAddLine(row, "Applies To Candidate  : ", PressureAppliesToCandidateText);
-      DashboardAddLine(row, "Guard Status          : ", PressureGuardStatusText);
-   }
-   else if(ActivePressureSubTab == 1)
-   {
-      DashboardAddHeader(row, "[PRESSURE EVIDENCE]");
-      DashboardAddLine(row, "Bullish Score         : ", IntegerToString(BullishPressureScore) + " / 100");
-      DashboardAddLine(row, "Bearish Score         : ", IntegerToString(BearishPressureScore) + " / 100");
-      DashboardAddLine(row, "Consecutive Bull Bars : ", IntegerToString(PressureConsecutiveBullishBars));
-      DashboardAddLine(row, "Consecutive Bear Bars : ", IntegerToString(PressureConsecutiveBearishBars));
-      DashboardAddLine(row, "Recent Higher Closes  : ", IntegerToString(PressureRecentHigherCloseCount));
-      DashboardAddLine(row, "Recent Lower Closes   : ", IntegerToString(PressureRecentLowerCloseCount));
-      DashboardAddLine(row, "Recent Higher Highs   : ", IntegerToString(PressureRecentHigherHighCount));
-      DashboardAddLine(row, "Recent Lower Lows     : ", IntegerToString(PressureRecentLowerLowCount));
-      DashboardAddLine(row, "Price Above EMA       : ", PressurePriceAboveEMAText);
-      DashboardAddLine(row, "Price Below EMA       : ", PressurePriceBelowEMAText);
-      DashboardAddLine(row, "EMA Slope Direction   : ", PressureEMASlopeDirectionText);
-      DashboardAddLine(row, "Structure Development : ", StructureDevelopmentStateText);
-      DashboardAddLine(row, "Momentum Direction    : ", PressureMomentumDirectionText);
-      DashboardAddLine(row, "Bull/Bear Evidence    : ", IntegerToString(PressureBullishEvidenceCount) + " / " + IntegerToString(PressureBearishEvidenceCount));
-   }
-   else if(ActivePressureSubTab == 2)
-   {
-      DashboardAddHeader(row, "[PRESSURE DECISION]");
-      DashboardAddLine(row, "Candidate Direction   : ", PressureCandidateDirectionText);
-      DashboardAddLine(row, "Candidate Zone        : ", IntegerToString(CurrentZone));
-      DashboardAddLine(row, "Candidate Regime      : ", PressureCandidateRegimeText);
-      DashboardAddLine(row, "Before Pressure       : ", PressureBeforeDecisionText);
-      DashboardAddLine(row, "After Pressure        : ", PressureAfterDecisionText);
-      DashboardAddLine(row, "Pressure Action       : ", PressureActionText);
-      DashboardAddLine(row, "Downgrade Reason      : ", PressureDowngradeReasonText);
-      DashboardAddLine(row, "Block Reason          : ", PressureBlockReasonText);
-      DashboardAddLine(row, "Missing Condition     : ", PressureMissingConditionText);
-   }
-   else
-   {
-      DashboardAddHeader(row, "[PRESSURE DEBUG]");
-      DashboardAddLine(row, "Pressure TF           : ", PressureEffectiveTFText);
-      DashboardAddLine(row, "Lookback Bars         : ", IntegerToString(EffectivePressureLookbackBars));
-      DashboardAddLine(row, "Bars Copied           : ", IntegerToString(PressureBarsCopied));
-      DashboardAddLine(row, "EMA Value             : ", PressureEMAValueText);
-      DashboardAddLine(row, "EMA Slope Points      : ", PressureEMASlopePointsText);
-      DashboardAddLine(row, "Last Close            : ", PressureLastCloseText);
-      DashboardAddLine(row, "Last High             : ", PressureLastHighText);
-      DashboardAddLine(row, "Last Low              : ", PressureLastLowText);
-      DashboardAddLine(row, "Bullish Evidence Count: ", IntegerToString(PressureBullishEvidenceCount));
-      DashboardAddLine(row, "Bearish Evidence Count: ", IntegerToString(PressureBearishEvidenceCount));
-      DashboardAddLine(row, "Status                : ", PressureGuardStatusText);
-   }
+   DashboardAddHeader(row, "[CURRENT PRESSURE]");
+   DashboardAddLine(row, "Current Pressure      : ",
+                    PressureDirectionText + " " + PressureLevelText);
+   DashboardAddLine(row, "Current Direction     : ",
+                    PressureDirectionText);
+   DashboardAddLine(row, "Pressure Level        : ", PressureLevelText);
+   DashboardAddLine(row, "Pressure Score        : ",
+                    IntegerToString(PressureScore) + " / 100");
+   DashboardAddLine(row, "Current Action        : ", PressureActionText);
+   DashboardAddLine(row, "Decision Impact       : ",
+                    PressureDecisionImpactText);
+   DashboardAddLine(row, "Execution Block       : ",
+                    PressureExecutionBlockApplied ? "BLOCKED" : "ALLOW",
+                    PressureExecutionBlockApplied ? clrRed : clrSeaGreen);
+   DashboardAddLine(row, "Block Reason          : ",
+                    PressureExecutionBlockReasonText);
 
    DashboardClearUnusedLines(row);
 }
@@ -1494,11 +1529,193 @@ void RenderPerformanceTab()
    DashboardClearUnusedLines(row);
 }
 
+void RenderResearchTab(string symbol)
+{
+   int row = 0;
+   DashboardRenderResearchSubTabs();
+
+   if(!UseResearchDB)
+   {
+      DashboardAddHeader(row, "[RESEARCH DISABLED]");
+      DashboardAddLine(row, "UseResearchDB         : ", "false");
+      DashboardAddLine(row, "Research analytics require UseResearchDB=true",
+                       "");
+      DashboardClearUnusedLines(row);
+      return;
+   }
+
+   if(ActiveResearchSubTab == 0)
+   {
+      DashboardAddHeader(row, "[EXPERIMENT]");
+      DashboardAddLine(row, "Experiment Name       : ",
+                       BacktestExperimentName);
+      DashboardAddLine(row, "Experiment ID         : ",
+                       IntegerToString(ResearchDBExperimentID));
+      DashboardAddLine(row, "Engine Version        : ", APP_VERSION);
+      DashboardAddLine(row, "Schema Version        : ",
+                       IntegerToString(ResearchDBSchemaVersion));
+      DashboardAddLine(row, "Symbol / Timeframe    : ",
+                       symbol + " / " + TimeframeToText(_Period));
+      DashboardAddLine(row, "Profile               : ",
+                       ManualMarketProfileText);
+      DashboardAddLine(row, "Pressure Mode         : ",
+                       PressureExecutionBlockModeText);
+      DashboardAddLine(row, "Execution Mode        : ", ExecutionModeText);
+      DashboardAddLine(row, "Signals / Trades      : ",
+                       IntegerToString(ResearchDBDiagnosticSignalCount) +
+                       " / " +
+                       IntegerToString(
+                          ResearchDBDiagnosticExecutedTradeCount));
+      DashboardAddLine(row, "Wins / Losses         : ",
+                       IntegerToString(ResearchAnalyticsWinCount) +
+                       " / " +
+                       IntegerToString(ResearchAnalyticsLossCount));
+      DashboardAddLine(row, "Profit Factor         : ",
+                       DoubleToString(
+                          ResearchAnalyticsProfitFactor, 2));
+      DashboardAddLine(row, "Net Profit            : ",
+                       DoubleToString(ResearchAnalyticsNetProfit, 2),
+                       ProfitColor(ResearchAnalyticsNetProfit));
+      DashboardAddLine(row, "Drawdown              : ",
+                       DoubleToString(ResearchAnalyticsDrawdown, 2));
+      DashboardAddLine(row, "Avg MAE / MFE         : ",
+                       DoubleToString(ResearchAnalyticsAverageMAE, 1) +
+                       " / " +
+                       DoubleToString(ResearchAnalyticsAverageMFE, 1));
+      DashboardAddLine(row, "Avg RR / Holding      : ",
+                       DoubleToString(ResearchAnalyticsAverageRR, 2) +
+                       " / " +
+                       DoubleToString(
+                          ResearchAnalyticsAverageHolding, 1));
+   }
+   else if(ActiveResearchSubTab == 1)
+   {
+      DashboardAddHeader(row, "[TRADE STATISTICS]");
+      DashboardAddLine(row, "Win / Loss            : ",
+                       IntegerToString(ResearchAnalyticsWinCount) +
+                       " / " +
+                       IntegerToString(ResearchAnalyticsLossCount));
+      DashboardAddLine(row, "TP / SL / Timeout     : ",
+                       IntegerToString(ResearchAnalyticsTPCount) + " / " +
+                       IntegerToString(ResearchAnalyticsSLCount) + " / " +
+                       IntegerToString(ResearchAnalyticsTimeoutCount));
+      DashboardAddLine(row, "Average Profit        : ",
+                       DoubleToString(
+                          ResearchAnalyticsAverageProfit, 2));
+      DashboardAddLine(row, "Average Loss          : ",
+                       DoubleToString(
+                          ResearchAnalyticsAverageLoss, 2));
+      DashboardAddLine(row, "Largest Win           : ",
+                       DoubleToString(
+                          ResearchAnalyticsLargestWin, 2));
+      DashboardAddLine(row, "Largest Loss          : ",
+                       DoubleToString(
+                          ResearchAnalyticsLargestLoss, 2));
+      DashboardAddLine(row, "Average RR            : ",
+                       DoubleToString(ResearchAnalyticsAverageRR, 2));
+      DashboardAddLine(row, "Average Holding Bars  : ",
+                       DoubleToString(
+                          ResearchAnalyticsAverageHolding, 1));
+   }
+   else if(ActiveResearchSubTab == 2)
+   {
+      int pressureTotal =
+         ResearchAnalyticsPressureLowCount +
+         ResearchAnalyticsPressureMediumCount +
+         ResearchAnalyticsPressureHighCount;
+      DashboardAddHeader(row, "[PRESSURE STATISTICS]");
+      DashboardAddLine(row, "LOW                   : ",
+                       DashboardCountPercentage(
+                          ResearchAnalyticsPressureLowCount,
+                          pressureTotal));
+      DashboardAddLine(row, "MEDIUM                : ",
+                       DashboardCountPercentage(
+                          ResearchAnalyticsPressureMediumCount,
+                          pressureTotal));
+      DashboardAddLine(row, "HIGH                  : ",
+                       DashboardCountPercentage(
+                          ResearchAnalyticsPressureHighCount,
+                          pressureTotal));
+      DashboardAddLine(row, "UP                    : ",
+                       DashboardCountPercentage(
+                          ResearchAnalyticsPressureUpCount,
+                          pressureTotal));
+      DashboardAddLine(row, "DOWN                  : ",
+                       DashboardCountPercentage(
+                          ResearchAnalyticsPressureDownCount,
+                          pressureTotal));
+      DashboardAddLine(row, "UNKNOWN               : ",
+                       DashboardCountPercentage(
+                          ResearchAnalyticsPressureUnknownCount,
+                          pressureTotal));
+      DashboardAddHeader(row, "[PRESSURE EXECUTION]");
+      DashboardAddLine(row, "Signals               : ",
+                       IntegerToString(
+                          ResearchDBDiagnosticSignalCount));
+      DashboardAddLine(row, "Blocked               : ",
+                       IntegerToString(
+                          ResearchDBDiagnosticBlockedSignalCount));
+      DashboardAddLine(row, "Executed              : ",
+                       IntegerToString(
+                          ResearchDBDiagnosticExecutedTradeCount));
+      DashboardAddLine(row, "WATCH / ALLOW         : ",
+                       IntegerToString(ResearchAnalyticsWatchCount) +
+                       " / " +
+                       IntegerToString(ResearchAnalyticsAllowCount));
+   }
+   else if(ActiveResearchSubTab == 3)
+   {
+      DashboardAddHeader(row, "[RESEARCH VALIDATION]");
+      DashboardAddLine(row, "Signals               : ",
+                       IntegerToString(
+                          ResearchDBDiagnosticSignalCount));
+      DashboardAddLine(row, "Trades                : ",
+                       IntegerToString(
+                          ResearchDBDiagnosticExecutedTradeCount));
+      DashboardAddLine(row, "Blocked               : ",
+                       IntegerToString(
+                          ResearchDBDiagnosticBlockedSignalCount));
+      DashboardAddLine(row, "Orphan Signals        : ",
+                       IntegerToString(
+                          ResearchDBDiagnosticOrphanSignalCount));
+      DashboardAddLine(row, "Orphan Trades         : ",
+                       IntegerToString(
+                          ResearchDBDiagnosticOrphanTradeCount));
+      DashboardAddLine(row, "Attribution Errors    : ",
+                       IntegerToString(
+                          ResearchDBDiagnosticAttributionErrorCount));
+      DashboardAddLine(row, "Validation Status     : ",
+                       ResearchDBDiagnosticValidationStatus,
+                       (ResearchDBDiagnosticValidationStatus == "OK")
+                       ? clrGreen : clrRed);
+      DashboardAddLine(row, "DB Last Error         : ",
+                       ResearchDBLastErrorText);
+   }
+   else
+   {
+      DashboardAddHeader(row, "[EPISODE INFRASTRUCTURE]");
+      DashboardAddLine(row, "Episodes              : ",
+                       IntegerToString(ResearchAnalyticsEpisodeCount));
+      DashboardAddLine(row, "Episode Trades        : ",
+                       IntegerToString(
+                          ResearchAnalyticsEpisodeTradeCount));
+      DashboardAddLine(row, "Episode Net Profit    : ",
+                       DoubleToString(
+                          ResearchAnalyticsEpisodeNetProfit, 2));
+      DashboardAddLine(row, "Episode Algorithm     : ",
+                       "NOT IMPLEMENTED");
+      DashboardAddLine(row, "Purpose               : ",
+                       "Future performance-regime research");
+   }
+
+   DashboardClearUnusedLines(row);
+}
+
 void RenderDebugTab(string symbol)
 {
    int row = 0;
 
-   DashboardAddHeader(row, "TAB 11 : Developer Debug / Responsible Engine: Developer Engine");
+   DashboardAddHeader(row, "TAB 12 : Developer Debug / Responsible Engine: Developer Engine");
    DashboardAddLine(row, "Rule Version          : ", APP_VERSION);
    DashboardAddLine(row, "Config Version        : ", "Alpha 1.0");
    DashboardAddLine(row, "Parameter Count       : ", "68");
@@ -1561,6 +1778,62 @@ void RenderDebugTab(string symbol)
    DashboardAddLine(row, "CSV Last Write        : ", JournalCSVLastWriteText);
    DashboardAddLine(row, "CSV Status            : ", JournalCSVStatusText);
 
+   DashboardAddHeader(row, "[RESEARCH DB]");
+   DashboardAddLine(row, "Use Research DB       : ", UseResearchDB ? "true" : "false");
+   DashboardAddLine(row, "Research DB Status    : ", ResearchDBStatusText,
+                    (ResearchDBStatusText == "ERROR") ? clrRed :
+                    ((ResearchDBStatusText == "OK") ? clrGreen : clrGray));
+   DashboardAddLine(row, "Research DB Path      : ", StringSubstr(ResearchDBPathText, 0, 70));
+   if(StringLen(ResearchDBPathText) > 70)
+      DashboardAddLine(row, "DB Path (cont.)       : ", StringSubstr(ResearchDBPathText, 70));
+   DashboardAddLine(row, "Research DB Filename  : ", ResearchDBFilenameText);
+   DashboardAddLine(row, "Experiment ID         : ", IntegerToString(ResearchDBExperimentID));
+   DashboardAddLine(row, "Last Signal ID        : ", IntegerToString(ResearchDBLastSignalID));
+   DashboardAddLine(row, "Last Trade ID         : ", IntegerToString(ResearchDBLastTradeID));
+   DashboardAddLine(row, "Last DB Write Time    : ", ResearchDBLastWriteTimeText);
+   DashboardAddLine(row, "Last DB Error         : ", ResearchDBLastErrorText,
+                    (ResearchDBLastErrorText == "N/A") ? clrGray : clrRed);
+   DashboardAddLine(row, "DB Signals Written    : ", IntegerToString(ResearchDBTotalSignalsWritten));
+   DashboardAddLine(row, "DB Trades Open Written: ", IntegerToString(ResearchDBTotalTradesOpenedWritten));
+   DashboardAddLine(row, "DB Trades Close Writ. : ", IntegerToString(ResearchDBTotalTradesClosedWritten));
+   DashboardAddLine(row, "DB Schema Version     : ", IntegerToString(ResearchDBSchemaVersion));
+   DashboardAddLine(row, "Pressure Policy Gov.  : ", ResearchDBPressurePolicyIsGoverning ? "YES" : "NO");
+   DashboardAddLine(row, "Policy Snapshot Count : ", IntegerToString(ResearchDBPolicySnapshotCount));
+   DashboardAddLine(row, "Future Outcome Count  : ", IntegerToString(ResearchDBFutureOutcomeCount));
+   DashboardAddLine(row, "Analysis Cache Count  : ", IntegerToString(ResearchDBAnalysisCacheCount));
+   DashboardAddLine(row, "View Definition Count : ", IntegerToString(ResearchDBViewDefinitionCount));
+   DashboardAddLine(row, "Actual View Status    : ", ResearchDBActualViewCreateStatusText,
+                    (ResearchDBActualViewCreateStatusText == "CREATED") ? clrGreen : clrGoldenrod);
+   DashboardAddLine(row, "Last View Error       : ", ResearchDBLastViewCreateErrorText,
+                    (ResearchDBLastViewCreateErrorText == "N/A") ? clrGray : clrRed);
+
+   DashboardAddHeader(row, "[RESEARCH DB DIAGNOSTICS]");
+   DashboardAddLine(row, "Signals               : ",
+                    IntegerToString(ResearchDBDiagnosticSignalCount));
+   DashboardAddLine(row, "Executed Trades       : ",
+                    IntegerToString(
+                       ResearchDBDiagnosticExecutedTradeCount));
+   DashboardAddLine(row, "Blocked Signals       : ",
+                    IntegerToString(
+                       ResearchDBDiagnosticBlockedSignalCount));
+   DashboardAddLine(row, "Saved Loss Candidates : ",
+                    IntegerToString(ResearchDBDiagnosticSavedLossCount));
+   DashboardAddLine(row, "Missed Win Candidates : ",
+                    IntegerToString(ResearchDBDiagnosticMissedWinCount));
+   DashboardAddLine(row, "Attribution Errors    : ",
+                    IntegerToString(
+                       ResearchDBDiagnosticAttributionErrorCount));
+   DashboardAddLine(row, "Orphan Signals        : ",
+                    IntegerToString(
+                       ResearchDBDiagnosticOrphanSignalCount));
+   DashboardAddLine(row, "Orphan Trades         : ",
+                    IntegerToString(
+                       ResearchDBDiagnosticOrphanTradeCount));
+   DashboardAddLine(row, "Validation Status     : ",
+                    ResearchDBDiagnosticValidationStatus,
+                    (ResearchDBDiagnosticValidationStatus == "OK")
+                    ? clrGreen : clrRed);
+
    DashboardClearUnusedLines(row);
 }
 
@@ -1584,6 +1857,9 @@ void DashboardRenderActiveTab(string symbol)
    if(ActiveDashboardTab != 6)
       DashboardHidePressureSubTabs();
 
+   if(ActiveDashboardTab != 10)
+      DashboardHideResearchSubTabs();
+
    if(ActiveDashboardTab == 0) { RenderSummaryTab(symbol); return; }
    if(ActiveDashboardTab == 1) { RenderMarketTab(symbol); return; }
    if(ActiveDashboardTab == 2) { RenderZoneTab(); return; }
@@ -1594,7 +1870,9 @@ void DashboardRenderActiveTab(string symbol)
    if(ActiveDashboardTab == 7) { RenderDecisionTab(); return; }
    if(ActiveDashboardTab == 8) { RenderTradeTab(); return; }
    if(ActiveDashboardTab == 9) { RenderPerformanceTab(); return; }
-   if(ActiveDashboardTab == 10) { RenderDebugTab(symbol); return; }
+   if(ActiveDashboardTab == 10 && UseResearchDB)
+      { RenderResearchTab(symbol); return; }
+   if(ActiveDashboardTab == 11) { RenderDebugTab(symbol); return; }
 
    ActiveDashboardTab = 0;
    RenderSummaryTab(symbol);
@@ -1718,6 +1996,19 @@ void DashboardHandleChartEvent(const int id, const string sparam)
       if(sparam == name)
       {
          ActiveTradeSubTab = tab;
+         ObjectSetInteger(0, sparam, OBJPROP_STATE, false);
+         DashboardEngine(GetTradeSymbol());
+         return;
+      }
+   }
+
+   for(int tab = 0; tab < TRE_RESEARCH_SUBTAB_COUNT; tab++)
+   {
+      string name = "TRE_RESEARCH_SUBTAB_" + IntegerToString(tab);
+
+      if(sparam == name)
+      {
+         ActiveResearchSubTab = tab;
          ObjectSetInteger(0, sparam, OBJPROP_STATE, false);
          DashboardEngine(GetTradeSymbol());
          return;

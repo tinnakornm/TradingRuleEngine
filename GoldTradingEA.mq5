@@ -20,9 +20,11 @@
 #include "engine/momentum_engine.mqh"
 #include "engine/pressure_guard_engine.mqh"
 #include "engine/entry_engine.mqh"
+#include "engine/pressure_execution_block_engine.mqh"
 #include "engine/execution_engine.mqh"
 #include "engine/trade_engine.mqh"
 #include "engine/journal_engine.mqh"
+#include "engine/research_db_engine.mqh"
 #include "engine/draw_engine.mqh"
 #include "engine/dashboard_engine.mqh"
 
@@ -41,6 +43,7 @@ void RunEngineCycle(bool allowBacktestExecution)
    RegimeEngine(symbol);
    PressureGuardEngine(symbol);
    EntryEngine();
+   PressureExecutionBlockEngine(symbol);
 
    if(allowBacktestExecution)
       ExecutionEngine(symbol);
@@ -49,6 +52,7 @@ void RunEngineCycle(bool allowBacktestExecution)
 
    TradeEngine(symbol);
    JournalEngine(symbol);
+   ResearchDBEngine(symbol);
    DrawEngine();
    DashboardEngine(symbol);
 }
@@ -59,6 +63,7 @@ int OnInit()
    EventSetTimer(refreshSeconds);
    TRE_InitializeResearchConfig();
    JournalInitialize(GetTradeSymbol());
+   ResearchDBInitialize(GetTradeSymbol());
 
    Print("----------------------------------------");
    Print("TRE INPUT CONFIGURATION");
@@ -107,6 +112,7 @@ void OnTimer()
 void OnDeinit(const int reason)
 {
    EventKillTimer();
+   ResearchDBFinalize();
    JournalFinalize(GetTradeSymbol());
    ZoneReleaseATRHandle();
    RegimeReleaseIndicatorHandles();
@@ -117,6 +123,7 @@ void OnDeinit(const int reason)
 
 double OnTester()
 {
+   ResearchDBFinalize();
    JournalFinalize(GetTradeSymbol());
    return 0.0;
 }

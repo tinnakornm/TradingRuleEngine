@@ -39,17 +39,37 @@ enum TRE_PRESSURE_LEVEL
 enum TRE_PRESSURE_ACTION
 {
    PRESSURE_ALLOW = 0,
-   PRESSURE_DOWNGRADE_TO_WATCH = 1,
-   PRESSURE_BLOCK_BUY = 2,
-   PRESSURE_BLOCK_SELL = 3
+   PRESSURE_WARN = 1,
+   PRESSURE_SOFT_REDUCE_SCORE = 2,
+   PRESSURE_SOFT_DOWNGRADE_TO_WATCH = 3,
+   PRESSURE_HARD_BLOCK_BUY = 4,
+   PRESSURE_HARD_BLOCK_SELL = 5
 };
 
 enum TRE_PRESSURE_GUARD_MODE
 {
    PRESSURE_GUARD_OFF = 0,
-   PRESSURE_GUARD_WARN_ONLY = 1,
-   PRESSURE_GUARD_DOWNGRADE = 2,
-   PRESSURE_GUARD_BLOCK = 3
+   PRESSURE_GUARD_DISPLAY_ONLY = 1,
+   PRESSURE_GUARD_WARN_ONLY = 2,
+   PRESSURE_GUARD_SOFT_BLOCK = 3,
+   PRESSURE_GUARD_HARD_BLOCK = 4
+};
+
+enum TRE_PRESSURE_DECISION_IMPACT
+{
+   PRESSURE_IMPACT_NONE = 0,
+   PRESSURE_IMPACT_WARNING_ONLY = 1,
+   PRESSURE_IMPACT_SCORE_REDUCED = 2,
+   PRESSURE_IMPACT_DOWNGRADED_TO_WATCH = 3,
+   PRESSURE_IMPACT_HARD_BLOCKED = 4
+};
+
+enum ENUM_PRESSURE_EXECUTION_BLOCK_MODE
+{
+   PRESSURE_EXECUTION_SHADOW = 0,
+   PRESSURE_EXECUTION_DIRECTION_BLOCK = 1,
+   PRESSURE_EXECUTION_HIGH_ONLY_BLOCK = 2,
+   PRESSURE_EXECUTION_MEDIUM_HIGH_BLOCK = 3
 };
 
 input string InpSymbol        = "GOLDmicro";
@@ -59,9 +79,9 @@ input ENUM_TIMEFRAMES EntryTF = PERIOD_M15;
 input ENUM_TIMEFRAMES ExecutionTF = PERIOD_M5;
 
 // BiasLookbackBars = lookback bars used by H4 Swing/Trend/Bias research.
-input int BiasLookbackBars    = 20;
+input int BiasLookbackBars    = 8;
 // ZoneLookbackBars = lookback bars used by H1 swing and fallback range.
-input int ZoneLookbackBars    = 20;
+input int ZoneLookbackBars    = 16;
 // Alpha 0.8 keeps zone behavior fixed at Zone 1 through Zone 6.
 input int ZoneCount           = 6;
 input int SwingDepth          = 2;
@@ -123,20 +143,44 @@ input bool RegimeUseATRExpansion = true;
 input int RegimeATRPeriod = 14;
 
 input bool UsePressureGuard = true;
-input TRE_PRESSURE_GUARD_MODE PressureGuardMode = PRESSURE_GUARD_BLOCK;
+input TRE_PRESSURE_GUARD_MODE PressureGuardMode = PRESSURE_GUARD_DISPLAY_ONLY;
 input int PressureLookbackBars = 8;
 // PERIOD_CURRENT means follow EntryTF; choose another value to override it.
 input ENUM_TIMEFRAMES PressureTF = PERIOD_CURRENT;
 input int PressureMediumThreshold = 60;
 input int PressureHighThreshold = 75;
-input bool PressureBlockOnlyInSidewayOrUnknown = true;
+input int PressureMediumPenalty = 15;
+input int PressureHighPenalty = 30;
+input bool PressureHighDowngradeToWatch = true;
+input bool PressureSoftBlockOnlyInSidewayOrUnknown = true;
 input bool PressureUseEMAFilter = true;
 input int PressureEMAPeriod = 50;
 input bool PressureUseStructureDevelopment = true;
 input bool PressureUseMomentum = true;
 
+input bool UsePressureExecutionBlock = false;
+input ENUM_PRESSURE_EXECUTION_BLOCK_MODE PressureExecutionBlockMode =
+   PRESSURE_EXECUTION_SHADOW;
+
 input bool EnableBacktestCSVLog = true;
 input string BacktestMarketStatus = "UNKNOWN";
 input string BacktestExperimentName = "ZONE_RESEARCH";
+
+input bool UseResearchDB = false;
+input string ResearchDBFolder = "TRE_RESEARCH";
+input string ResearchDBFilenamePrefix = "TRE_RESEARCH";
+input bool ResearchDBUseCommonFiles = true;
+input bool ResearchDBWriteSignals = true;
+input bool ResearchDBWriteTrades = true;
+input bool ResearchDBWriteZoneSnapshot = true;
+input bool ResearchDBWriteStructureSnapshot = true;
+input bool ResearchDBWriteRegimeSnapshot = true;
+input bool ResearchDBWritePressureSnapshot = true;
+input bool ResearchDBWriteDecisionSnapshot = true;
+input bool ResearchDBWriteParameters = true;
+input bool ResearchDBFlushEverySignal = true;
+input bool ResearchDBVerboseLog = false;
+// Research label only; this does not alter Entry or Execution behavior.
+input bool ResearchDBPressurePolicyIsGoverning = false;
 
 #endif

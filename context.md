@@ -8,6 +8,39 @@ The goal of this project is to convert human trading experience into measurable,
 
 The first objective is research, learning, and rule validation. The priority is not aggressive profit.
 
+## Current Research Milestone (2026-06-30)
+
+Pressure Validation data collection is complete. The latest observed engine
+baseline produced a Profit Factor (PF) of `0.84`. This is a recorded research
+result, not a guaranteed return and not a hard-coded engine target. A PF below
+`1.00` means the observed gross profit did not yet exceed observed gross loss,
+so the result is the comparison baseline for the next analytics and
+best-practice research cycle.
+
+Current implementation status:
+
+- Pressure Guard calculation and the Pressure Execution Block hook are
+  connected and compile-clean.
+- Default execution-block behavior remains passive:
+  `UsePressureExecutionBlock=false` and
+  `PressureExecutionBlockMode=PRESSURE_EXECUTION_SHADOW`.
+- Controlled validation can select Direction Block, High Only Block, or
+  Medium/High Block without changing Pressure calculation.
+- Research DB schema version 5 provides deterministic signal/trade
+  attribution, immutable execution snapshots, policy snapshots, experiment
+  metadata, integrity diagnostics, and extensible feature snapshots.
+- Saved/Missed classification does not infer hypothetical outcomes. A blocked
+  signal remains `BLOCKED_PENDING_OUTCOME` until a real `future_outcome`
+  record exists.
+- Research Analytics views cover experiment, pressure, execution, trade
+  distribution, anomaly, episode, and database validation analysis.
+- Episode storage and views are ready, but episode grouping algorithms are
+  intentionally not implemented.
+- Dashboard separates live Pressure/Execution state from historical Research
+  analytics.
+- Latest verification: MetaEditor compile `0 errors, 0 warnings`; all 20
+  stored analytics view definitions passed SQLite schema/query validation.
+
 ## 2. Current Architecture
 
 Current project status: Alpha 1.0
@@ -29,12 +62,15 @@ Current folder structure:
 - `engine/structure_engine.mqh` = swing confirmation reasoning
 - `engine/momentum_engine.mqh` = simple candle momentum reasoning
 - `engine/pressure_guard_engine.mqh` = passive short-term opposing-pressure guard
+- `engine/pressure_execution_block_engine.mqh` = optional permission gate immediately before execution
 - `engine/entry_engine.mqh` = final explainable decision maker
 - `engine/execution_engine.mqh` = guarded Strategy Tester execution only
 - `engine/trade_engine.mqh` = read-only open position and pending order state
 - `engine/journal_engine.mqh` = Strategy Tester-only experiment CSV logger
+- `engine/research_db_engine.mqh` = fail-open SQLite flight recorder and analytics schema
 - `engine/draw_engine.mqh` = chart drawing objects
 - `engine/dashboard_engine.mqh` = scalable tab dashboard UI and rule debugger
+- `tre_research_report.py` = read-only HTML/Markdown research report generator
 
 ## 3. Core Design Rules
 
@@ -153,7 +189,10 @@ Alpha 1.0 Pressure Guard:
 - Default scope protects SIDEWAY/UNKNOWN contexts and excludes confirmed active
   UPTREND/DOWNTREND profiles.
 - `PressureTF=PERIOD_CURRENT` follows EntryTF.
-- Pressure has Overview, Evidence, Decision, and Debug sub-tabs.
+- The live Pressure page is intentionally focused on current direction, level,
+  score, action, decision impact, execution-block state, and block reason.
+- Historical Pressure distribution and execution statistics live under the
+  Research page.
 - Pressure-blocked and downgraded candidates are exported in Signal CSV rows.
 - Pressure Guard contains no order, close, pending-order, or trade-management
   calls.
@@ -528,6 +567,28 @@ Use this section as the starting context for ChatGPT or another AI agent.
 - Timeout bars use `ExecutionTF`, with `EntryTF` as the history fallback.
 - Persistent Backtest Export v2 CSV files with parameters, signals, trades, summary, zone statistics, and engine statistics.
 - Dashboard displays requested versus normalized execution lot.
+- Optional Pressure Execution Block modes with SHADOW remaining the default.
+- SQLite Research DB schema v5 with deterministic execution attribution and
+  immutable signal snapshots.
+- Research Analytics views:
+  `v_experiment_summary`, `v_pressure_statistics`,
+  `v_pressure_execution`, `v_trade_distribution`, `v_trade_anomaly`,
+  `v_trade_episode`, and `v_research_validation`.
+- Dashboard Research page with Experiment, Trade, Pressure, Validation, and
+  Episode sub-tabs.
+- Python read-only report generator for HTML, Markdown, CSV summaries, and PNG
+  charts.
+
+### Latest Performance Baseline
+
+- Pressure Validation data collection: complete.
+- Latest observed Profit Factor: `0.84`.
+- Interpretation: this baseline is not profitable yet because PF remains below
+  `1.00`.
+- Preserve this run as the pre-optimization comparison baseline.
+- Do not change trading, Zone, Pressure, TP, SL, or lot logic merely to improve
+  the reported number; use the Research views to identify evidence-backed
+  changes first.
 
 ### CSV Location
 
@@ -587,6 +648,13 @@ explicitly enables either feature.
 
 ### Recommended Next Analysis
 
+- Use PF `0.84` as the fixed comparison baseline.
+- Inspect `v_trade_anomaly` before treating TP/SL differences as strategy
+  failures.
+- Compare `v_pressure_execution` and `v_pressure_statistics` to determine
+  whether blocking changes execution rate without improving loss avoidance.
+- Use `v_research_validation` to require zero attribution/orphan errors before
+  accepting any performance conclusion.
 - Compare profile groups separately: UPTREND, DOWNTREND, and SIDEWAY.
 - Compare manual baseline, detection-only, and auto-switch experiments separately.
 - Measure switch count, blocking reasons, and performance before and after each active-profile switch.
@@ -598,4 +666,8 @@ explicitly enables either feature.
 
 ### Verification Status
 
-The latest source compiled in MetaEditor with `0 errors, 0 warnings`. A new Strategy Tester run is required after every compile so MT5 loads the latest `.ex5`.
+- Latest source compile: `0 errors, 0 warnings`.
+- Stored SQLite analytics views validated: `20/20`.
+- Latest observed validation baseline: PF `0.84`.
+- A new Strategy Tester run is required after every compile so MT5 loads the
+  latest `.ex5`.

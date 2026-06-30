@@ -8,6 +8,22 @@ Display Only by default. Simulated market orders are permitted only when
 `ExecutionMode` is `TRE_BACKTEST_ONLY` and MT5 confirms the EA is running in
 Strategy Tester. Live chart execution is always blocked in this version.
 
+## Current Research Baseline
+
+Pressure Validation data collection is complete. The latest observed engine
+result has a Profit Factor (PF) of `0.84`. This is a research baseline, not a
+profit guarantee or a hard-coded target. Because PF is below `1.00`, the run is
+retained as the fixed comparison point for subsequent analytics rather than as
+evidence that the strategy is ready for live execution.
+
+Current validation status:
+
+- Research DB schema: version 5
+- Deterministic execution-signal attribution: implemented
+- Research Analytics views: 20 definitions validated
+- Episode storage/view infrastructure: ready; grouping algorithm pending
+- MetaEditor compile: `0 errors, 0 warnings`
+
 ## Installation
 
 Copy the `GoldTradingEA` folder into:
@@ -34,12 +50,15 @@ Attach the EA to the GOLDmicro chart.
 - `engine/structure_engine.mqh` = swing confirmation reasoning
 - `engine/momentum_engine.mqh` = simple candle momentum reasoning
 - `engine/pressure_guard_engine.mqh` = passive opposing-pressure protection
+- `engine/pressure_execution_block_engine.mqh` = optional pre-execution pressure permission gate
 - `engine/entry_engine.mqh` = final explainable decision maker
 - `engine/execution_engine.mqh` = guarded Strategy Tester execution only
 - `engine/trade_engine.mqh` = read-only position, pending order, and account state
 - `engine/journal_engine.mqh` = Strategy Tester-only experiment CSV export
+- `engine/research_db_engine.mqh` = fail-open SQLite snapshots, validation, and analytics views
 - `engine/draw_engine.mqh` = chart objects
 - `engine/dashboard_engine.mqh` = scalable tab dashboard UI
+- `tre_research_report.py` = read-only HTML/Markdown/CSV/PNG report generator
 
 ## Safety
 
@@ -311,7 +330,8 @@ Pair, Structure Build, and Confirmation. These are presentation outputs derived
 from the existing state machine and do not change its rules or scores.
 
 Controller evaluation order is Swing, Trend, Zone, Structure, Momentum,
-Regime, Pressure Guard, Entry, and guarded Execution.
+Regime, Pressure Guard, Entry, optional Pressure Execution Block, guarded
+Execution, Trade state, Journal, Research DB, Draw, and Dashboard.
 
 ## Pressure Guard Engine
 
@@ -320,22 +340,65 @@ context. It scores bullish and bearish pressure from consecutive EntryTF
 candles, higher/lower closes, higher highs/lower lows, EMA position and slope,
 Structure Development State, and Momentum direction.
 
-Default mode is `BLOCK`. HIGH opposing pressure can prevent a ready candidate;
-MEDIUM opposing pressure downgrades it to WATCH. `WARN_ONLY` records and
-displays the conflict without changing the candidate. The guard never creates
-an opposite signal. With `PressureBlockOnlyInSidewayOrUnknown=true`, confirmed
-UPTREND or DOWNTREND active profiles remain outside guard scope.
+Default mode is `DISPLAY_ONLY`, so pressure is calculated without changing an
+Entry decision. In `SOFT_BLOCK`, MEDIUM opposing pressure reduces the final
+entry score by `PressureMediumPenalty`; HIGH opposing pressure applies
+`PressureHighPenalty` and can downgrade a READY candidate to WATCH.
+`WARN_ONLY` records and displays the conflict without changing the candidate.
+`HARD_BLOCK` remains available as an explicit opt-in mode. The guard never
+creates an opposite signal. With
+`PressureSoftBlockOnlyInSidewayOrUnknown=true`, confirmed UPTREND or DOWNTREND
+regimes remain outside soft-block scope.
 
 `PressureTF=PERIOD_CURRENT` means follow `EntryTF`; another timeframe can be
-selected explicitly. Pressure has Overview, Evidence, Decision, and Debug
-sub-tabs plus a Summary card. Signal CSV rows include pressure scores, action,
-reason, candidate direction, and decision after pressure. Blocked and
-downgraded candidates are logged even though their final action is no longer
-READY.
+selected explicitly. The live Pressure page is intentionally limited to
+current direction, level, score, action, decision impact, execution-block
+state, and block reason. Historical Pressure distribution and block statistics
+live under Research. Signal CSV and SQLite snapshots retain the candidate,
+score, and decision before and after Pressure, the applied penalty, scope
+result, and decision impact.
+
+`UsePressureExecutionBlock=false` and
+`PressureExecutionBlockMode=PRESSURE_EXECUTION_SHADOW` remain the passive
+defaults. Controlled Strategy Tester experiments can explicitly select
+Direction Block, High Only Block, or Medium/High Block. The permission gate
+runs before Execution Engine and never changes Pressure calculation.
 
 Pressure Engine does not send orders, close positions, alter Regime, or manage
 trades. Execution remains separately guarded by Backtest Only and
 `MQL_TESTER`.
+
+## SQLite Research Database
+
+The optional Research DB engine is a fail-open SQLite flight recorder in
+`engine/research_db_engine.mqh`. It is disabled by default with
+`UseResearchDB=false` and runs alongside the existing CSV journal.
+
+When enabled, each run receives a collision-safe database named
+`TRE_RESEARCH_<symbol>_<YYYYMMDD_HHMMSS>.db`. By default it is stored below
+the terminal common files folder in `TRE_RESEARCH`. The database contains
+normalized experiment, parameter, signal, zone, structure, regime, pressure,
+decision, trade-open, and trade-close tables linked by experiment, signal, and
+trade identifiers. Trade records include holding time, planned and realized
+RR, MAE/MFE, and floating-profit excursions.
+
+The Research dashboard is available only when `UseResearchDB=true`. Its
+Experiment, Trade, Pressure, Validation, and Episode subtabs separate
+historical analytics from the live Pressure and Execution pages. Database
+errors remain fail-open: they are printed and displayed but never stop the EA
+or CSV journal. `ResearchDBFlushEverySignal` selects SQLite FULL versus NORMAL
+synchronous mode; snapshot and trade families can be enabled independently.
+
+Schema version 5 provides deterministic execution-signal attribution,
+immutable signal snapshots, experiment metadata, extensible feature snapshots,
+integrity diagnostics, episode infrastructure, stored view definitions, and
+the complete analytics view layer. Core views include
+`v_experiment_summary`, `v_pressure_statistics`, `v_pressure_execution`,
+`v_trade_distribution`, `v_trade_anomaly`, `v_trade_episode`, and
+`v_research_validation`. Episode grouping algorithms are intentionally not
+implemented yet.
+`ResearchDBPressurePolicyIsGoverning=false` is a research label only; changing
+it never changes Entry, Pressure, or Execution behavior.
 
 ## Alpha 1.0 Regime Engine
 
@@ -497,9 +560,11 @@ Tabs:
 - Structure
 - Momentum
 - Risk
+- Pressure
 - Decision
 - Trade
 - Performance
+- Research
 - Debug
 
 The dashboard renders runtime state produced by engines. It must not own trading or evaluation logic. Future engines such as Liquidity, Order Block, FVG, Session, News, and AI Confidence should expose their own data model and then be displayed in a tab without redesigning existing tabs.
@@ -507,7 +572,16 @@ The dashboard renders runtime state produced by engines. It must not own trading
 Summary tab update:
 
 - TAB 1 now starts with large summary cards for decision, signal score, floating P/L, pending count, current position, short advice, market regime, and margin level.
+- Secondary views separate Overview, Scores, Execution, Research, and Diagnostics.
 - Summary cards are intended for quick reading before opening detailed tabs.
+
+Research tab update:
+
+- Available only when `UseResearchDB=true`.
+- Sub-tabs are Experiment, Trade, Pressure, Validation, and Episode.
+- Historical statistics are kept out of the live Pressure and Execution pages.
+- Episode analysis currently displays infrastructure records only; automatic
+  episode grouping is a future research algorithm.
 
 Trade tab update:
 

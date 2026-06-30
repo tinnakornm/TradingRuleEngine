@@ -272,21 +272,72 @@ bool EntryApplyDirectionalFilter(ENTRY_ACTION candidate)
    return false;
 }
 
+void EntryInitializePressureSnapshot()
+{
+   CandidateDirectionBeforePressure = "NONE";
+   DecisionBeforePressure = "WAIT";
+   DecisionAfterPressure = "WAIT";
+   ScoreBeforePressure = TotalScore;
+   PressurePenaltyApplied = 0;
+   ScoreAfterPressure = TotalScore;
+   PressureDecisionImpact = PRESSURE_IMPACT_NONE;
+   PressureDecisionImpactText = "NONE";
+}
+
+void EntryApplyPressureAdjustedScore()
+{
+   TotalScore = ScoreAfterPressure;
+   ConfirmationScore = TotalScore;
+   TotalEngineStatusText = (TotalScore >= 80)
+                           ? TRE_STATUS_PASS
+                           : ((TotalScore >= 40) ? TRE_STATUS_WAIT
+                                                : TRE_STATUS_FAIL);
+   EngineScoreTotalText = "Total " + IntegerToString(TotalScore) +
+                          " " + TotalEngineStatusText;
+   if(PressurePenaltyApplied > 0)
+   {
+      EngineScoreFormulaText += " | Pressure -" +
+                                IntegerToString(
+                                   PressurePenaltyApplied) +
+                                " => " +
+                                IntegerToString(TotalScore);
+   }
+   RiskLevelText = (TotalScore >= 80)
+                   ? "Low"
+                   : ((TotalScore >= 60) ? "Medium" : "High");
+}
+
 bool EntryApplyPressureGuard(ENTRY_ACTION candidate,
                              string readyReason)
 {
-   ENTRY_ACTION guardedAction = PressureGuardApply(candidate);
+   ENTRY_ACTION guardedAction =
+      PressureGuardApply(candidate, TotalScore);
+   EntryApplyPressureAdjustedScore();
 
    if(guardedAction != candidate)
    {
       ActionState = guardedAction;
-      EntryReason = PressureReasonText;
+      EntryReason =
+         (PressureDecisionImpact ==
+          PRESSURE_IMPACT_DOWNGRADED_TO_WATCH)
+         ? "Pressure Soft Block: " + PressureReasonText
+         : PressureReasonText;
       MissingConditionText = PressureMissingConditionText;
       return false;
    }
 
    ActionState = candidate;
-   EntryReason = readyReason;
+   if(PressureDecisionImpact == PRESSURE_IMPACT_SCORE_REDUCED)
+   {
+      EntryReason =
+         readyReason + " | Pressure Soft Block: " +
+         PressureReasonText;
+      MissingConditionText = PressureMissingConditionText;
+   }
+   else
+   {
+      EntryReason = readyReason;
+   }
    return true;
 }
 
@@ -294,6 +345,7 @@ void EntryEngine()
 {
    ActionState = ACTION_WAIT;
    EntryCalculateWeightedScores();
+   EntryInitializePressureSnapshot();
    EntryPrepareDirectionalFilter();
 
    bool zoneOnlyActive = AllowZoneOnlyResearchDecision &&

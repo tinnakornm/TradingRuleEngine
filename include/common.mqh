@@ -39,6 +39,10 @@ void TRE_InitializeResearchConfig()
    EffectivePressureHighThreshold =
       (int)MathMax(EffectivePressureMediumThreshold,
                    MathMin(100, PressureHighThreshold));
+   EffectivePressureMediumPenalty =
+      (int)MathMax(0, MathMin(100, PressureMediumPenalty));
+   EffectivePressureHighPenalty =
+      (int)MathMax(0, MathMin(100, PressureHighPenalty));
    EffectivePressureEMAPeriod =
       (int)MathMax(2, PressureEMAPeriod);
    EffectivePressureTF =
@@ -108,6 +112,12 @@ void TRE_InitializeResearchConfig()
    {
       Print("TRE Config Warning: PressureHighThreshold forced above medium and into 0-100");
    }
+
+   if(PressureMediumPenalty < 0 || PressureMediumPenalty > 100)
+      Print("TRE Config Warning: PressureMediumPenalty forced into 0-100");
+
+   if(PressureHighPenalty < 0 || PressureHighPenalty > 100)
+      Print("TRE Config Warning: PressureHighPenalty forced into 0-100");
 
    if(PressureEMAPeriod < 2)
       Print("TRE Config Warning: PressureEMAPeriod too small, forced to 2");
