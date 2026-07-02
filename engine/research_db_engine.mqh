@@ -23,6 +23,14 @@ struct TRE_ResearchDBTrade
    double openPrice;
    double stopLoss;
    double takeProfit;
+   double requestedSLPoints;
+   double requestedTPPoints;
+   double effectiveSLPoints;
+   double effectiveTPPoints;
+   double symbolPoint;
+   double tickSize;
+   double tickValue;
+   double spreadAtEntry;
    double plannedRR;
    double maePoints;
    double mfePoints;
@@ -364,7 +372,55 @@ bool ResearchDBApplyFlightRecorderMigration()
       !ResearchDBEnsureColumn("policy_snapshot",
          "momentum", "TEXT") ||
       !ResearchDBEnsureColumn("policy_snapshot",
-         "ema_state", "TEXT"))
+         "ema_state", "TEXT") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "requested_sl_points", "REAL") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "requested_tp_points", "REAL") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "effective_sl_points", "REAL") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "effective_tp_points", "REAL") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "entry_price", "REAL") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "sl_price", "REAL") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "tp_price", "REAL") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "close_reason", "TEXT") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "actual_volume", "REAL") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "symbol_point", "REAL") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "tick_size", "REAL") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "tick_value", "REAL") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "spread_at_entry", "REAL") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "gross_profit", "REAL") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "net_profit", "REAL") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "expected_loss_money", "REAL") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "expected_profit_money", "REAL") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "profit_deviation_money", "REAL") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "profit_deviation_points", "REAL") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "is_exact_sl_hit", "INTEGER") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "is_exact_tp_hit", "INTEGER") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "is_timeout_exit", "INTEGER") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "is_tester_close", "INTEGER") ||
+      !ResearchDBEnsureColumn("trade_close",
+         "audit_reason", "TEXT"))
       return false;
    return true;
 }
@@ -570,6 +626,50 @@ bool ResearchDBCreateSchema()
       "FOREIGN KEY(experiment_id) REFERENCES experiment(experiment_id),"
       "FOREIGN KEY(signal_id) REFERENCES signal(signal_id))";
 
+   string tradeMarketSnapshot =
+      "CREATE TABLE IF NOT EXISTS trade_market_snapshot("
+      "/* IMMUTABLE IDENTITY: direction 1=buy, -1=sell. */ "
+      "TradeID INTEGER PRIMARY KEY,MagicNumber INTEGER,Symbol TEXT,"
+      "Timeframe INTEGER,OpenTime TEXT,Direction INTEGER,Lot REAL,"
+      "EntryPrice REAL,"
+      "/* STRUCTURE: swing direction 1=up, -1=down; lengths are points. */ "
+      "CurrentSwingDirection INTEGER,CurrentSwingDepth INTEGER,"
+      "CurrentSwingLength REAL,PreviousSwingDepth INTEGER,"
+      "PreviousSwingLength REAL,CurrentZone INTEGER,ZoneScore REAL,"
+      "ZoneWidth REAL,DistanceToZoneCenter REAL,DistanceToZoneEdge REAL,"
+      "/* EMA FEATURES: values, one-bar slopes, comparisons, distances. */ "
+      "EMA20 REAL,EMA50 REAL,EMA100 REAL,EMA200 REAL,"
+      "EMA20Slope REAL,EMA50Slope REAL,EMA100Slope REAL,EMA200Slope REAL,"
+      "EMA20Above50 INTEGER,EMA50Above100 INTEGER,"
+      "EMA100Above200 INTEGER,EMAAlignmentScore INTEGER,"
+      "DistanceEMA20_50 REAL,DistanceEMA50_100 REAL,"
+      "DistanceEMA100_200 REAL,"
+      "/* VOLATILITY AND TREND: raw indicator/candle measurements. */ "
+      "ATR REAL,ATRPercent REAL,TrueRange REAL,"
+      "AverageTrueRangeRatio REAL,DailyRange REAL,"
+      "CurrentCandleRange REAL,ADX REAL,PlusDI REAL,MinusDI REAL,"
+      "TrendStrength REAL,TrendAcceleration REAL,"
+      "/* PRESSURE: MQL enum IDs and numeric scores, never labels. */ "
+      "PressureState INTEGER,PressureScore REAL,PressureStrength REAL,"
+      "PressureDirection INTEGER,PressureAge INTEGER,"
+      "/* SESSION: 0=Asian,1=London,2=NewYork,3=AfterHours; holiday -1 unknown. */ "
+      "DayOfWeek INTEGER,Hour INTEGER,TradingSession INTEGER,"
+      "IsHoliday INTEGER,IsWeekend INTEGER,"
+      "/* EXECUTION: spread is points; PointValue stores SYMBOL_POINT. */ "
+      "Spread REAL,SpreadPercentATR REAL,TickSize REAL,"
+      "PointValue REAL,Digits INTEGER,"
+      "/* CURRENT CANDLE: unmodified EntryTF OHLC and shape. */ "
+      "CurrentOpen REAL,CurrentHigh REAL,CurrentLow REAL,"
+      "CurrentClose REAL,BodySize REAL,UpperShadow REAL,"
+      "LowerShadow REAL,Bullish INTEGER,Bearish INTEGER,DojiScore REAL,"
+      "/* MULTI TIMEFRAME: raw EMA50 and ATR values. */ "
+      "M15EMA50 REAL,H1EMA50 REAL,H4EMA50 REAL,D1EMA50 REAL,"
+      "H1ATR REAL,H4ATR REAL,D1ATR REAL,"
+      "/* QUALITY FLAGS: immutable numeric flags from this row only. */ "
+      "HasStrongTrend INTEGER,HasHighVolatility INTEGER,"
+      "NearZoneCenter INTEGER,NearZoneEdge INTEGER,"
+      "PressureConfirmed INTEGER,EMAFullyAligned INTEGER)";
+
    string schemaVersion =
       "CREATE TABLE IF NOT EXISTS research_schema_version("
       "schema_version INTEGER PRIMARY KEY,created_at TEXT,"
@@ -672,6 +772,29 @@ bool ResearchDBCreateSchema()
       "average_rr REAL,purpose TEXT,created_at TEXT,"
       "FOREIGN KEY(experiment_id) REFERENCES experiment(experiment_id))";
 
+   string adaptiveLossClusterEpisode =
+      "CREATE TABLE IF NOT EXISTS adaptive_loss_cluster_episode("
+      "EpisodeID INTEGER PRIMARY KEY,Symbol TEXT,Timeframe TEXT,"
+      "PatternDirection TEXT,PatternZone INTEGER,ActivatedTime TEXT,"
+      "ExpiredTime TEXT,CooldownBars INTEGER,"
+      "RemainingBarsAtStart INTEGER,LossClusterSize INTEGER,"
+      "BlockedOpportunityCount INTEGER DEFAULT 0,"
+      "FirstBlockedTime TEXT,LastBlockedTime TEXT,"
+      "Status TEXT,CreatedAt TEXT)";
+
+   string adaptiveShadowTrade =
+      "CREATE TABLE IF NOT EXISTS adaptive_shadow_trade("
+      "ShadowTradeID INTEGER PRIMARY KEY,EpisodeID INTEGER,"
+      "BlockedAuditSerial INTEGER,BlockedTime TEXT,Symbol TEXT,"
+      "Timeframe TEXT,Direction TEXT,Zone INTEGER,Lot REAL,"
+      "EntryPrice REAL,ExpectedSLPrice REAL,ExpectedTPPrice REAL,"
+      "ShadowExitTime TEXT,ShadowExitPrice REAL,"
+      "ShadowExitReason TEXT,ShadowProfitUSD REAL,"
+      "ShadowHoldingBars INTEGER,ShadowHoldingMinutes INTEGER,"
+      "WouldWin INTEGER,WouldLoss INTEGER,Status TEXT,CreatedAt TEXT,"
+      "FOREIGN KEY(EpisodeID) REFERENCES "
+      "adaptive_loss_cluster_episode(EpisodeID))";
+
    if(!ResearchDBExecute("PRAGMA foreign_keys=ON", "enable foreign keys"))
       return false;
    if(!ResearchDBExecute(experiment, "create experiment table") ||
@@ -683,6 +806,8 @@ bool ResearchDBCreateSchema()
       !ResearchDBExecute(decision, "create decision_snapshot table") ||
       !ResearchDBExecute(tradeOpen, "create trade_open table") ||
       !ResearchDBExecute(tradeClose, "create trade_close table") ||
+      !ResearchDBExecute(tradeMarketSnapshot,
+                         "create trade_market_snapshot table") ||
       !ResearchDBExecute(schemaVersion,
                          "create research_schema_version table") ||
       !ResearchDBExecute(runNote, "create research_run_note table") ||
@@ -701,7 +826,11 @@ bool ResearchDBCreateSchema()
       !ResearchDBExecute(integrityEvent,
                          "create research_integrity_event table") ||
       !ResearchDBExecute(researchEpisode,
-                         "create research_episode table"))
+                         "create research_episode table") ||
+      !ResearchDBExecute(adaptiveLossClusterEpisode,
+                         "create adaptive loss cluster episode table") ||
+      !ResearchDBExecute(adaptiveShadowTrade,
+                         "create adaptive shadow trade table"))
       return false;
 
    if(!ResearchDBApplyFlightRecorderMigration())
@@ -710,6 +839,13 @@ bool ResearchDBCreateSchema()
    return ResearchDBExecute(
       "CREATE INDEX IF NOT EXISTS idx_signal_experiment "
       "ON signal(experiment_id);"
+      "CREATE INDEX IF NOT EXISTS idx_adaptive_episode_pattern "
+      "ON adaptive_loss_cluster_episode("
+      "PatternDirection,PatternZone);"
+      "CREATE INDEX IF NOT EXISTS idx_adaptive_shadow_episode "
+      "ON adaptive_shadow_trade(EpisodeID);"
+      "CREATE INDEX IF NOT EXISTS idx_adaptive_shadow_pattern "
+      "ON adaptive_shadow_trade(Direction,Zone);"
       "CREATE INDEX IF NOT EXISTS idx_zone_signal "
       "ON zone_snapshot(signal_id);"
       "CREATE INDEX IF NOT EXISTS idx_structure_signal "
@@ -831,7 +967,7 @@ long ResearchDBInsertExperiment(string symbol)
       ResearchDBSQLText(PressureExecutionBlockModeToText(
          PressureExecutionBlockMode)) + "," +
       ResearchDBSQLInteger(ResearchDBSchemaVersion) + "," +
-      ResearchDBSQLText("RESEARCH_ANALYTICS_PHASE") + "," +
+      ResearchDBSQLText("TRADE_RESULT_AUDIT_PHASE") + "," +
       ResearchDBSQLText(PressureExecutionBlockModeToText(
          PressureExecutionBlockMode)) + "," +
       ResearchDBSQLText(TRE_MarketProfileToText(
@@ -894,7 +1030,56 @@ void ResearchDBWriteParameterSet()
    ResearchDBWriteParameter("ResearchSchemaVersion",
                             IntegerToString(ResearchDBSchemaVersion));
    ResearchDBWriteParameter("ResearchVersion",
-                            "RESEARCH_ANALYTICS_PHASE");
+                            "TRADE_RESULT_AUDIT_PHASE");
+   ResearchDBWriteParameter("TransitionDoubleEntryBars", "3");
+   ResearchDBWriteParameter("TransitionLowScoreGap", "10");
+   ResearchDBWriteParameter("EnableWeekendProtection",
+                            JournalBoolText(EnableWeekendProtection));
+   ResearchDBWriteParameter("WeekendBlockDay",
+                            TRE_WeekendDayToText(WeekendBlockDay));
+   ResearchDBWriteParameter("WeekendBlockHour",
+                            IntegerToString(
+                               TRE_WeekendHour(WeekendBlockHour)));
+   ResearchDBWriteParameter("WeekendForceCloseHour",
+                            IntegerToString(
+                               TRE_WeekendHour(WeekendForceCloseHour)));
+   ResearchDBWriteParameter("EnableAdaptiveLossCluster",
+                            JournalBoolText(EnableAdaptiveLossCluster));
+   ResearchDBWriteParameter("LossClusterThreshold",
+                            IntegerToString(
+                               AdaptiveEffectiveThreshold()));
+   ResearchDBWriteParameter("LossClusterCooldownBars",
+                            IntegerToString(
+                               AdaptiveEffectiveCooldown()));
+   ResearchDBWriteParameter("AdaptiveClusterMode",
+                            AdaptiveClusterModeText());
+   ResearchDBWriteParameter("UseAdvancedAdaptiveCluster",
+                            JournalBoolText(
+                               UseAdvancedAdaptiveCluster));
+   ResearchDBWriteParameter("AdaptiveEnableBUYZone1",
+                            JournalBoolText(AdaptiveEnableBUYZone1));
+   ResearchDBWriteParameter("AdaptiveEnableBUYZone2",
+                            JournalBoolText(AdaptiveEnableBUYZone2));
+   ResearchDBWriteParameter("AdaptiveEnableBUYZone3",
+                            JournalBoolText(AdaptiveEnableBUYZone3));
+   ResearchDBWriteParameter("AdaptiveEnableBUYZone4",
+                            JournalBoolText(AdaptiveEnableBUYZone4));
+   ResearchDBWriteParameter("AdaptiveEnableBUYZone5",
+                            JournalBoolText(AdaptiveEnableBUYZone5));
+   ResearchDBWriteParameter("AdaptiveEnableBUYZone6",
+                            JournalBoolText(AdaptiveEnableBUYZone6));
+   ResearchDBWriteParameter("AdaptiveEnableSELLZone1",
+                            JournalBoolText(AdaptiveEnableSELLZone1));
+   ResearchDBWriteParameter("AdaptiveEnableSELLZone2",
+                            JournalBoolText(AdaptiveEnableSELLZone2));
+   ResearchDBWriteParameter("AdaptiveEnableSELLZone3",
+                            JournalBoolText(AdaptiveEnableSELLZone3));
+   ResearchDBWriteParameter("AdaptiveEnableSELLZone4",
+                            JournalBoolText(AdaptiveEnableSELLZone4));
+   ResearchDBWriteParameter("AdaptiveEnableSELLZone5",
+                            JournalBoolText(AdaptiveEnableSELLZone5));
+   ResearchDBWriteParameter("AdaptiveEnableSELLZone6",
+                            JournalBoolText(AdaptiveEnableSELLZone6));
 }
 
 int ResearchDBCountRows(string tableName)
@@ -1081,6 +1266,191 @@ void ResearchDBInsertRunNote(string noteType, string noteKey,
    ResearchDBExecute(sql, "insert research run note");
 }
 
+string ResearchDBAdaptiveDetailValue(string detail, string key)
+{
+   string marker = key + "=";
+   int start = StringFind(detail, marker);
+   if(start < 0)
+      return "";
+   start += StringLen(marker);
+   int finish = StringFind(detail, ";", start);
+   if(finish < 0)
+      finish = StringLen(detail);
+   return StringSubstr(detail, start, finish - start);
+}
+
+void ResearchDBApplyAdaptiveEpisodeAudit(string eventName,
+                                         long episodeID,
+                                         string detail,
+                                         datetime eventTime)
+{
+   if(episodeID <= 0)
+      return;
+
+   string eventText = ResearchDBTimeText(eventTime);
+   if(eventName == "ADAPTIVE_ACTIVATE")
+   {
+      string sql =
+         "INSERT OR IGNORE INTO adaptive_loss_cluster_episode("
+         "EpisodeID,Symbol,Timeframe,PatternDirection,PatternZone,"
+         "ActivatedTime,ExpiredTime,CooldownBars,RemainingBarsAtStart,"
+         "LossClusterSize,BlockedOpportunityCount,FirstBlockedTime,"
+         "LastBlockedTime,Status,CreatedAt) VALUES(" +
+         ResearchDBSQLInteger(episodeID) + "," +
+         ResearchDBSQLText(
+            ResearchDBAdaptiveDetailValue(detail, "Symbol")) + "," +
+         ResearchDBSQLText(
+            ResearchDBAdaptiveDetailValue(detail, "Timeframe")) + "," +
+         ResearchDBSQLText(
+            ResearchDBAdaptiveDetailValue(
+               detail, "BlockedDirection")) + "," +
+         ResearchDBSQLInteger(
+            StringToInteger(
+               ResearchDBAdaptiveDetailValue(
+                  detail, "BlockedZone"))) + "," +
+         ResearchDBSQLText(eventText) + ",NULL," +
+         ResearchDBSQLInteger(
+            StringToInteger(
+               ResearchDBAdaptiveDetailValue(
+                  detail, "CooldownBars"))) + "," +
+         ResearchDBSQLInteger(
+            StringToInteger(
+               ResearchDBAdaptiveDetailValue(
+                  detail, "RemainingBarsAtStart"))) + "," +
+         ResearchDBSQLInteger(
+            StringToInteger(
+               ResearchDBAdaptiveDetailValue(
+                  detail, "LossClusterSize"))) +
+         ",0,NULL,NULL,'ACTIVE'," +
+         ResearchDBSQLText(eventText) + ")";
+      ResearchDBExecute(sql, "insert adaptive episode");
+      return;
+   }
+
+   if(eventName == "ADAPTIVE_BLOCK_OPPORTUNITY")
+   {
+      string sql =
+         "UPDATE adaptive_loss_cluster_episode SET "
+         "BlockedOpportunityCount=BlockedOpportunityCount+1,"
+         "FirstBlockedTime=COALESCE(FirstBlockedTime," +
+         ResearchDBSQLText(eventText) + "),LastBlockedTime=" +
+         ResearchDBSQLText(eventText) +
+         " WHERE EpisodeID=" + ResearchDBSQLInteger(episodeID) +
+         " AND Status='ACTIVE'";
+      ResearchDBExecute(sql, "update adaptive blocked opportunity");
+      return;
+   }
+
+   if(eventName == "ADAPTIVE_EXPIRE")
+   {
+      string sql =
+         "UPDATE adaptive_loss_cluster_episode SET Status='EXPIRED',"
+         "ExpiredTime=" + ResearchDBSQLText(eventText) +
+         " WHERE EpisodeID=" + ResearchDBSQLInteger(episodeID) +
+         " AND Status='ACTIVE'";
+      ResearchDBExecute(sql, "expire adaptive episode");
+   }
+}
+
+void ResearchDBCaptureAdaptiveShadowTrades()
+{
+   if(!ResearchDBCanWrite())
+      return;
+
+   for(int i = 0; i < ArraySize(TREAdaptiveShadowTrades); i++)
+   {
+      if(!TREAdaptiveShadowTrades[i].dbOpenWritten)
+      {
+         string insertSQL =
+            "INSERT OR IGNORE INTO adaptive_shadow_trade("
+            "ShadowTradeID,EpisodeID,BlockedAuditSerial,BlockedTime,"
+            "Symbol,Timeframe,Direction,Zone,Lot,EntryPrice,"
+            "ExpectedSLPrice,ExpectedTPPrice,ShadowExitTime,"
+            "ShadowExitPrice,ShadowExitReason,ShadowProfitUSD,"
+            "ShadowHoldingBars,ShadowHoldingMinutes,WouldWin,WouldLoss,"
+            "Status,CreatedAt) VALUES(" +
+            ResearchDBSQLInteger(
+               TREAdaptiveShadowTrades[i].shadowTradeID) + "," +
+            ResearchDBSQLInteger(
+               TREAdaptiveShadowTrades[i].episodeID) + "," +
+            ResearchDBSQLInteger(
+               TREAdaptiveShadowTrades[i].blockedAuditSerial) + "," +
+            ResearchDBSQLText(
+               ResearchDBTimeText(
+                  TREAdaptiveShadowTrades[i].blockedTime)) + "," +
+            ResearchDBSQLText(
+               TREAdaptiveShadowTrades[i].symbol) + "," +
+            ResearchDBSQLText(
+               TimeframeToText(
+                  TREAdaptiveShadowTrades[i].timeframe)) + "," +
+            ResearchDBSQLText(
+               AdaptiveV1DirectionText(
+                  TREAdaptiveShadowTrades[i].direction)) + "," +
+            ResearchDBSQLInteger(
+               TREAdaptiveShadowTrades[i].zone) + "," +
+            ResearchDBSQLDouble(
+               TREAdaptiveShadowTrades[i].lot) + "," +
+            ResearchDBSQLDouble(
+               TREAdaptiveShadowTrades[i].entryPrice) + "," +
+            ResearchDBSQLDouble(
+               TREAdaptiveShadowTrades[i].expectedSLPrice) + "," +
+            ResearchDBSQLDouble(
+               TREAdaptiveShadowTrades[i].expectedTPPrice) +
+            ",NULL,NULL,NULL,0,0,0,0,0,'OPEN'," +
+            ResearchDBSQLText(
+               ResearchDBTimeText(
+                  TREAdaptiveShadowTrades[i].createdAt)) + ")";
+         if(ResearchDBExecute(
+               insertSQL, "insert adaptive shadow trade"))
+         {
+            TREAdaptiveShadowTrades[i].dbOpenWritten = true;
+         }
+      }
+
+      if(TREAdaptiveShadowTrades[i].status != "CLOSED" ||
+         !TREAdaptiveShadowTrades[i].dbOpenWritten ||
+         TREAdaptiveShadowTrades[i].dbCloseWritten)
+      {
+         continue;
+      }
+
+      string updateSQL =
+         "UPDATE adaptive_shadow_trade SET ShadowExitTime=" +
+         ResearchDBSQLText(
+            ResearchDBTimeText(
+               TREAdaptiveShadowTrades[i].shadowExitTime)) +
+         ",ShadowExitPrice=" +
+         ResearchDBSQLDouble(
+            TREAdaptiveShadowTrades[i].shadowExitPrice) +
+         ",ShadowExitReason=" +
+         ResearchDBSQLText(
+            TREAdaptiveShadowTrades[i].shadowExitReason) +
+         ",ShadowProfitUSD=" +
+         ResearchDBSQLDouble(
+            TREAdaptiveShadowTrades[i].shadowProfitUSD) +
+         ",ShadowHoldingBars=" +
+         ResearchDBSQLInteger(
+            TREAdaptiveShadowTrades[i].shadowHoldingBars) +
+         ",ShadowHoldingMinutes=" +
+         ResearchDBSQLInteger(
+            TREAdaptiveShadowTrades[i].shadowHoldingMinutes) +
+         ",WouldWin=" +
+         ResearchDBSQLInteger(
+            ResearchDBBool(TREAdaptiveShadowTrades[i].wouldWin)) +
+         ",WouldLoss=" +
+         ResearchDBSQLInteger(
+            ResearchDBBool(TREAdaptiveShadowTrades[i].wouldLoss)) +
+         ",Status='CLOSED' WHERE ShadowTradeID=" +
+         ResearchDBSQLInteger(
+            TREAdaptiveShadowTrades[i].shadowTradeID);
+      if(ResearchDBExecute(
+            updateSQL, "close adaptive shadow trade"))
+      {
+         TREAdaptiveShadowTrades[i].dbCloseWritten = true;
+      }
+   }
+}
+
 void ResearchDBInitializeSchemaMetadata()
 {
    string versionSQL =
@@ -1120,6 +1490,44 @@ void ResearchDBInitializeSchemaMetadata()
          "Research analytics views, episode infrastructure, and dashboard separation") +
       ")";
    if(!ResearchDBExecute(version5SQL, "insert schema version 5"))
+      return;
+
+   string version6SQL =
+      "INSERT OR IGNORE INTO research_schema_version("
+      "schema_version,created_at,description) VALUES(6," +
+      ResearchDBSQLText(ResearchDBTimeText(TimeCurrent())) + "," +
+      ResearchDBSQLText(
+         "Fixed SL TP realized-result audit and money deviation fields") +
+      ")";
+   if(!ResearchDBExecute(version6SQL, "insert schema version 6"))
+      return;
+
+   string version7SQL =
+      "INSERT OR IGNORE INTO research_schema_version("
+      "schema_version,created_at,description) VALUES(7," +
+      ResearchDBSQLText(ResearchDBTimeText(TimeCurrent())) + "," +
+      ResearchDBSQLText(
+         "Immutable pre-entry trade market snapshot features") + ")";
+   if(!ResearchDBExecute(version7SQL, "insert schema version 7"))
+      return;
+
+   string version8SQL =
+      "INSERT OR IGNORE INTO research_schema_version("
+      "schema_version,created_at,description) VALUES(8," +
+      ResearchDBSQLText(ResearchDBTimeText(TimeCurrent())) + "," +
+      ResearchDBSQLText(
+         "Adaptive Loss Cluster V1 episode lifecycle analytics") + ")";
+   if(!ResearchDBExecute(version8SQL, "insert schema version 8"))
+      return;
+
+   string version9SQL =
+      "INSERT OR IGNORE INTO research_schema_version("
+      "schema_version,created_at,description) VALUES(9," +
+      ResearchDBSQLText(ResearchDBTimeText(TimeCurrent())) + "," +
+      ResearchDBSQLText(
+         "Research-only Adaptive V1 blocked-opportunity shadow outcomes") +
+      ")";
+   if(!ResearchDBExecute(version9SQL, "insert schema version 9"))
       return;
 
    ResearchDBInsertRunNote(
@@ -1164,6 +1572,223 @@ string ResearchDBViewSignalLifecycle()
       "AND t.signal_id=s.signal_id "
       "LEFT JOIN trade_close tc ON tc.experiment_id=s.experiment_id "
       "AND tc.trade_id=t.trade_id";
+}
+
+string ResearchDBViewAdaptiveLossClusterMetrics()
+{
+   return
+      "CREATE VIEW IF NOT EXISTS vw_adaptive_loss_cluster_metrics AS "
+      "SELECT e.experiment_id AS ExperimentID,"
+      "SUM(CASE WHEN n.note_type='AdaptiveLossClusterV1' "
+      "AND n.note_key='ADAPTIVE_EVALUATE' THEN 1 ELSE 0 END) "
+      "AS TotalEvaluations,"
+      "SUM(CASE WHEN n.note_type='AdaptiveLossClusterV1' "
+      "AND n.note_key='ADAPTIVE_CANDIDATE' THEN 1 ELSE 0 END) "
+      "AS CandidateSignals,"
+      "SUM(CASE WHEN n.note_type='AdaptiveLossClusterV1' "
+      "AND n.note_key='ADAPTIVE_BLOCK_OPPORTUNITY' "
+      "THEN 1 ELSE 0 END) AS BlockedOpportunities,"
+      "SUM(CASE WHEN n.note_type='AdaptiveLossClusterV1' "
+      "AND n.note_key='ADAPTIVE_EXECUTE_PASS' THEN 1 ELSE 0 END) "
+      "AS ExecutedTrades,"
+      "SUM(CASE WHEN n.note_type='AdaptiveLossClusterV1' "
+      "AND n.note_key='ADAPTIVE_ACTIVATE' THEN 1 ELSE 0 END) "
+      "AS ActivationCount,"
+      "SUM(CASE WHEN n.note_type='AdaptiveLossClusterV1' "
+      "AND n.note_key='ADAPTIVE_EXPIRE' THEN 1 ELSE 0 END) "
+      "AS ExpireCount,"
+      "COALESCE((SELECT x.note_value FROM research_run_note x "
+      "WHERE x.experiment_id=e.experiment_id "
+      "AND x.note_key='adaptive_v1_last_blocked_direction' "
+      "ORDER BY x.note_id DESC LIMIT 1),'NONE') AS BlockedDirection,"
+      "COALESCE((SELECT x.note_value FROM research_run_note x "
+      "WHERE x.experiment_id=e.experiment_id "
+      "AND x.note_key='adaptive_v1_last_blocked_zone' "
+      "ORDER BY x.note_id DESC LIMIT 1),'0') AS BlockedZone,"
+      "CASE WHEN SUM(CASE WHEN n.note_type='AdaptiveLossClusterV1' "
+      "AND n.note_key='ADAPTIVE_CANDIDATE' THEN 1 ELSE 0 END)=0 "
+      "THEN 0.0 ELSE 100.0*SUM(CASE WHEN "
+      "n.note_type='AdaptiveLossClusterV1' "
+      "AND n.note_key='ADAPTIVE_BLOCK_OPPORTUNITY' "
+      "THEN 1 ELSE 0 END)/"
+      "SUM(CASE WHEN n.note_type='AdaptiveLossClusterV1' "
+      "AND n.note_key='ADAPTIVE_CANDIDATE' THEN 1 ELSE 0 END) END "
+      "AS BlockRateCandidatePct "
+      "FROM experiment e LEFT JOIN research_run_note n "
+      "ON n.experiment_id=e.experiment_id GROUP BY e.experiment_id";
+}
+
+string ResearchDBViewAdaptiveEpisodeSummary()
+{
+   return
+      "CREATE VIEW IF NOT EXISTS vw_adaptive_episode_summary AS "
+      "SELECT COUNT(*) AS TotalEpisodes,"
+      "COALESCE(SUM(CASE WHEN Status='ACTIVE' THEN 1 ELSE 0 END),0) "
+      "AS ActiveEpisodes,"
+      "COALESCE(SUM(CASE WHEN Status='EXPIRED' THEN 1 ELSE 0 END),0) "
+      "AS ExpiredEpisodes,"
+      "COALESCE(SUM(BlockedOpportunityCount),0) "
+      "AS TotalBlockedOpportunities,"
+      "COALESCE(AVG(BlockedOpportunityCount),0.0) "
+      "AS AvgBlockedOpportunitiesPerEpisode,"
+      "COALESCE(MAX(BlockedOpportunityCount),0) "
+      "AS MaxBlockedOpportunitiesPerEpisode,"
+      "COALESCE(SUM(CASE WHEN PatternDirection='BUY' AND PatternZone=1 "
+      "THEN 1 ELSE 0 END),0) AS BUYZone1Episodes,"
+      "COALESCE(SUM(CASE WHEN PatternDirection='SELL' AND PatternZone=6 "
+      "THEN 1 ELSE 0 END),0) AS SELLZone6Episodes,"
+      "COALESCE(SUM(CASE WHEN PatternDirection='SELL' AND PatternZone=5 "
+      "THEN 1 ELSE 0 END),0) AS SELLZone5Episodes,"
+      "COALESCE((SELECT PatternDirection||' Zone'||PatternZone "
+      "FROM adaptive_loss_cluster_episode GROUP BY PatternDirection,"
+      "PatternZone ORDER BY COUNT(*) DESC,PatternDirection,PatternZone "
+      "LIMIT 1),'NONE') AS MostFrequentPattern,"
+      "COALESCE((SELECT PatternDirection||' Zone'||PatternZone "
+      "FROM adaptive_loss_cluster_episode GROUP BY PatternDirection,"
+      "PatternZone HAVING SUM(BlockedOpportunityCount)>0 "
+      "ORDER BY SUM(BlockedOpportunityCount) DESC,"
+      "PatternDirection,PatternZone LIMIT 1),'NONE') "
+      "AS MostBlockedPattern FROM adaptive_loss_cluster_episode";
+}
+
+string ResearchDBViewAdaptiveEpisodeDetail()
+{
+   return
+      "CREATE VIEW IF NOT EXISTS vw_adaptive_episode_detail AS "
+      "SELECT EpisodeID,PatternDirection,PatternZone,ActivatedTime,"
+      "ExpiredTime,CooldownBars,LossClusterSize,"
+      "BlockedOpportunityCount,FirstBlockedTime,LastBlockedTime,Status,"
+      "ROUND((julianday(COALESCE(ExpiredTime,LastBlockedTime,"
+      "ActivatedTime))-"
+      "julianday(ActivatedTime))*1440.0,2) AS DurationMinutes,"
+      "CASE WHEN (julianday(COALESCE(ExpiredTime,LastBlockedTime,"
+      "ActivatedTime))-"
+      "julianday(ActivatedTime))*24.0<=0 THEN 0.0 ELSE ROUND("
+      "BlockedOpportunityCount/((julianday(COALESCE(ExpiredTime,"
+      "LastBlockedTime,ActivatedTime))-julianday(ActivatedTime))*"
+      "24.0),4) END "
+      "AS BlockedOpportunityPerHour "
+      "FROM adaptive_loss_cluster_episode ORDER BY EpisodeID";
+}
+
+string ResearchDBViewAdaptivePatternSummary()
+{
+   return
+      "CREATE VIEW IF NOT EXISTS vw_adaptive_pattern_summary AS "
+      "SELECT PatternDirection,PatternZone,COUNT(*) AS EpisodeCount,"
+      "SUM(BlockedOpportunityCount) AS TotalBlockedOpportunities,"
+      "AVG(BlockedOpportunityCount) AS AvgBlockedOpportunities,"
+      "MAX(BlockedOpportunityCount) AS MaxBlockedOpportunities,"
+      "MIN(ActivatedTime) AS FirstActivation,"
+      "MAX(ActivatedTime) AS LastActivation "
+      "FROM adaptive_loss_cluster_episode "
+      "GROUP BY PatternDirection,PatternZone "
+      "ORDER BY TotalBlockedOpportunities DESC";
+}
+
+string ResearchDBViewAdaptiveShadowSummary()
+{
+   return
+      "CREATE VIEW IF NOT EXISTS vw_adaptive_shadow_summary AS "
+      "SELECT COUNT(*) AS TotalShadowTrades,"
+      "COALESCE(SUM(CASE WHEN Status='CLOSED' "
+      "THEN 1 ELSE 0 END),0) "
+      "AS ClosedShadowTrades,"
+      "COALESCE(SUM(CASE WHEN Status='OPEN' "
+      "THEN 1 ELSE 0 END),0) "
+      "AS OpenShadowTrades,"
+      "COALESCE(SUM(CASE WHEN WouldWin=1 "
+      "THEN 1 ELSE 0 END),0) AS ShadowWins,"
+      "COALESCE(SUM(CASE WHEN WouldLoss=1 "
+      "THEN 1 ELSE 0 END),0) AS ShadowLosses,"
+      "COALESCE(SUM(CASE WHEN Status='CLOSED' "
+      "THEN ShadowProfitUSD ELSE 0 END),0.0) AS ShadowNetProfit,"
+      "COALESCE(SUM(CASE WHEN ShadowProfitUSD>0 "
+      "THEN ShadowProfitUSD ELSE 0 END),0.0) AS ShadowGrossProfit,"
+      "ABS(COALESCE(SUM(CASE WHEN ShadowProfitUSD<0 "
+      "THEN ShadowProfitUSD ELSE 0 END),0.0)) AS ShadowGrossLoss,"
+      "CASE WHEN ABS(COALESCE(SUM(CASE WHEN ShadowProfitUSD<0 "
+      "THEN ShadowProfitUSD ELSE 0 END),0.0))=0 THEN NULL "
+      "ELSE COALESCE(SUM(CASE WHEN ShadowProfitUSD>0 "
+      "THEN ShadowProfitUSD ELSE 0 END),0.0)/ABS(SUM(CASE WHEN "
+      "ShadowProfitUSD<0 THEN ShadowProfitUSD ELSE 0 END)) END "
+      "AS ShadowProfitFactor,"
+      "COALESCE(AVG(CASE WHEN Status='CLOSED' "
+      "THEN ShadowProfitUSD END),0.0) AS AvgShadowProfit,"
+      "COALESCE(AVG(CASE WHEN Status='CLOSED' "
+      "THEN ShadowHoldingBars END),0.0) AS AvgShadowHoldingBars,"
+      "COALESCE(AVG(CASE WHEN Status='CLOSED' "
+      "THEN ShadowHoldingMinutes END),0.0) "
+      "AS AvgShadowHoldingMinutes FROM adaptive_shadow_trade";
+}
+
+string ResearchDBViewAdaptiveEpisodeShadowResult()
+{
+   return
+      "CREATE VIEW IF NOT EXISTS vw_adaptive_episode_shadow_result AS "
+      "SELECT e.EpisodeID,e.PatternDirection,e.PatternZone,"
+      "e.ActivatedTime,e.ExpiredTime,e.BlockedOpportunityCount,"
+      "COUNT(s.ShadowTradeID) AS ShadowTradeCount,"
+      "SUM(CASE WHEN s.WouldWin=1 THEN 1 ELSE 0 END) "
+      "AS ShadowWinCount,"
+      "SUM(CASE WHEN s.WouldLoss=1 THEN 1 ELSE 0 END) "
+      "AS ShadowLossCount,"
+      "COALESCE(SUM(CASE WHEN s.Status='CLOSED' "
+      "THEN s.ShadowProfitUSD ELSE 0 END),0.0) AS ShadowNetProfit,"
+      "CASE WHEN ABS(COALESCE(SUM(CASE WHEN s.ShadowProfitUSD<0 "
+      "THEN s.ShadowProfitUSD ELSE 0 END),0.0))=0 THEN NULL "
+      "ELSE COALESCE(SUM(CASE WHEN s.ShadowProfitUSD>0 "
+      "THEN s.ShadowProfitUSD ELSE 0 END),0.0)/ABS(SUM(CASE WHEN "
+      "s.ShadowProfitUSD<0 THEN s.ShadowProfitUSD ELSE 0 END)) END "
+      "AS ShadowProfitFactor,"
+      "COALESCE(AVG(CASE WHEN s.Status='CLOSED' "
+      "THEN s.ShadowProfitUSD END),0.0) AS AvgShadowProfit,"
+      "CASE WHEN COUNT(s.ShadowTradeID)=0 THEN 'NO_DATA' "
+      "WHEN COALESCE(SUM(CASE WHEN s.Status='CLOSED' "
+      "THEN s.ShadowProfitUSD ELSE 0 END),0.0)<0 THEN 'GOOD_BLOCK' "
+      "WHEN COALESCE(SUM(CASE WHEN s.Status='CLOSED' "
+      "THEN s.ShadowProfitUSD ELSE 0 END),0.0)>0 THEN 'BAD_BLOCK' "
+      "ELSE 'NEUTRAL' END AS EpisodeJudgement "
+      "FROM adaptive_loss_cluster_episode e "
+      "LEFT JOIN adaptive_shadow_trade s ON s.EpisodeID=e.EpisodeID "
+      "GROUP BY e.EpisodeID,e.PatternDirection,e.PatternZone,"
+      "e.ActivatedTime,e.ExpiredTime,e.BlockedOpportunityCount";
+}
+
+string ResearchDBViewAdaptivePatternShadowResult()
+{
+   return
+      "CREATE VIEW IF NOT EXISTS vw_adaptive_pattern_shadow_result AS "
+      "WITH episode_result AS (SELECT e.EpisodeID,"
+      "e.PatternDirection AS Direction,e.PatternZone AS Zone,"
+      "COUNT(s.ShadowTradeID) AS ShadowTradeCount,"
+      "SUM(CASE WHEN s.WouldWin=1 THEN 1 ELSE 0 END) AS Wins,"
+      "SUM(CASE WHEN s.WouldLoss=1 THEN 1 ELSE 0 END) AS Losses,"
+      "COALESCE(SUM(CASE WHEN s.Status='CLOSED' "
+      "THEN s.ShadowProfitUSD ELSE 0 END),0.0) AS NetProfit,"
+      "COALESCE(SUM(CASE WHEN s.ShadowProfitUSD>0 "
+      "THEN s.ShadowProfitUSD ELSE 0 END),0.0) AS GrossProfit,"
+      "ABS(COALESCE(SUM(CASE WHEN s.ShadowProfitUSD<0 "
+      "THEN s.ShadowProfitUSD ELSE 0 END),0.0)) AS GrossLoss "
+      "FROM adaptive_loss_cluster_episode e "
+      "LEFT JOIN adaptive_shadow_trade s ON s.EpisodeID=e.EpisodeID "
+      "GROUP BY e.EpisodeID,e.PatternDirection,e.PatternZone) "
+      "SELECT Direction,Zone,COUNT(*) AS EpisodeCount,"
+      "SUM(ShadowTradeCount) AS ShadowTradeCount,"
+      "SUM(Wins) AS ShadowWinCount,SUM(Losses) AS ShadowLossCount,"
+      "SUM(NetProfit) AS ShadowNetProfit,"
+      "CASE WHEN SUM(GrossLoss)=0 THEN NULL "
+      "ELSE SUM(GrossProfit)/SUM(GrossLoss) END AS ShadowProfitFactor,"
+      "CASE WHEN SUM(ShadowTradeCount)=0 THEN 0.0 "
+      "ELSE SUM(NetProfit)/SUM(ShadowTradeCount) END "
+      "AS AvgShadowProfit,"
+      "SUM(CASE WHEN ShadowTradeCount>0 AND NetProfit<0 "
+      "THEN 1 ELSE 0 END) AS GoodBlockEpisodes,"
+      "SUM(CASE WHEN ShadowTradeCount>0 AND NetProfit>0 "
+      "THEN 1 ELSE 0 END) AS BadBlockEpisodes,"
+      "-1.0*SUM(NetProfit) AS NetAdaptiveBenefit "
+      "FROM episode_result GROUP BY Direction,Zone "
+      "ORDER BY NetAdaptiveBenefit DESC";
 }
 
 string ResearchDBViewPressureAdviceExecution()
@@ -1583,29 +2208,26 @@ string ResearchDBViewTradeAnomaly()
    return
       "CREATE VIEW IF NOT EXISTS v_trade_anomaly AS "
       "SELECT tc.experiment_id,tc.trade_id,tc.signal_id,"
-      "t.planned_reward_points AS expected_tp,"
-      "CASE WHEN tc.profit_points>0 THEN tc.profit_points ELSE 0 END "
-      "AS actual_profit,"
-      "CASE WHEN tc.profit_points>0 THEN "
-      "tc.profit_points-t.planned_reward_points ELSE NULL END "
-      "AS profit_difference,-t.planned_risk_points AS expected_sl,"
-      "CASE WHEN tc.profit_points<0 THEN tc.profit_points ELSE 0 END "
-      "AS actual_loss,"
-      "CASE WHEN tc.profit_points<0 THEN "
-      "tc.profit_points+t.planned_risk_points ELSE NULL END "
-      "AS loss_difference,tc.exit_reason,CASE "
-      "WHEN UPPER(tc.exit_reason)='TP' AND tc.profit_points<=0 "
-      "THEN 'TP_PROFIT_MISMATCH' "
-      "WHEN UPPER(tc.exit_reason)='SL' AND tc.profit_points>=0 "
-      "THEN 'SL_LOSS_MISMATCH' "
-      "WHEN UPPER(tc.exit_reason)='TP' AND "
-      "ABS(tc.profit_points-t.planned_reward_points)>1 "
-      "THEN 'TP_DISTANCE_MISMATCH' "
-      "WHEN UPPER(tc.exit_reason)='SL' AND "
-      "ABS(tc.profit_points+t.planned_risk_points)>1 "
-      "THEN 'SL_DISTANCE_MISMATCH' ELSE 'OK' END AS flag "
-      "FROM trade_close tc LEFT JOIN trade_open t "
-      "ON t.experiment_id=tc.experiment_id AND t.trade_id=tc.trade_id";
+      "tc.requested_sl_points,tc.requested_tp_points,"
+      "tc.effective_sl_points,tc.effective_tp_points,"
+      "tc.entry_price,tc.sl_price,tc.tp_price,tc.close_price,"
+      "tc.close_reason,tc.actual_volume,tc.symbol_point,tc.tick_size,"
+      "tc.tick_value,tc.spread_at_entry,tc.commission,tc.swap,"
+      "tc.gross_profit,tc.net_profit,tc.expected_loss_money,"
+      "tc.expected_profit_money,tc.profit_deviation_money,"
+      "tc.profit_deviation_points,tc.is_exact_sl_hit,"
+      "tc.is_exact_tp_hit,tc.is_timeout_exit,tc.is_tester_close,"
+      "tc.audit_reason,CASE "
+      "WHEN tc.close_reason='TP' AND tc.is_exact_tp_hit=0 "
+      "THEN 'TP_PRICE_MISMATCH' "
+      "WHEN tc.close_reason='SL' AND tc.is_exact_sl_hit=0 "
+      "THEN 'SL_PRICE_MISMATCH' "
+      "WHEN tc.close_reason IN "
+      "('TIMEOUT','TESTER_CLOSE','CLOSE_WEEKEND_PROTECTION') "
+      "THEN 'NON_FIXED_EXIT' "
+      "WHEN ABS(COALESCE(tc.profit_deviation_money,0))>0.01 "
+      "THEN 'MONEY_DEVIATION' ELSE 'OK' END AS flag "
+      "FROM trade_close tc";
 }
 
 string ResearchDBViewTradeEpisode()
@@ -1646,6 +2268,438 @@ string ResearchDBViewResearchValidation()
       "FROM experiment e";
 }
 
+string ResearchDBViewTransitionDoubleEntryRisk()
+{
+   return
+      "CREATE VIEW IF NOT EXISTS v_transition_double_entry_risk AS "
+      "WITH settings AS (SELECT e.experiment_id,"
+      "COALESCE((SELECT CAST(p.value AS INTEGER) FROM parameter p "
+      "WHERE p.experiment_id=e.experiment_id "
+      "AND p.name='TransitionDoubleEntryBars' "
+      "ORDER BY p.parameter_id DESC LIMIT 1),3) AS window_bars,"
+      "COALESCE((SELECT CAST(p.value AS REAL) FROM parameter p "
+      "WHERE p.experiment_id=e.experiment_id "
+      "AND p.name='TransitionLowScoreGap' "
+      "ORDER BY p.parameter_id DESC LIMIT 1),10) AS low_score_gap,"
+      "CASE e.execution_tf WHEN 'M1' THEN 1 WHEN 'M5' THEN 5 "
+      "WHEN 'M15' THEN 15 WHEN 'M30' THEN 30 WHEN 'H1' THEN 60 "
+      "WHEN 'H4' THEN 240 WHEN 'D1' THEN 1440 ELSE 1 END "
+      "AS bar_minutes FROM experiment e),raw AS ("
+      "SELECT tc.experiment_id,tc.trade_id,tc.signal_id,tc.symbol,"
+      "tc.direction,COALESCE(tc.entry_time,tc.open_time) AS entry_time,"
+      "COALESCE(tc.exit_time,tc.close_time) AS close_time,"
+      "COALESCE(tc.net_profit,tc.profit+COALESCE(tc.swap,0)+"
+      "COALESCE(tc.commission,0)) AS profit,"
+      "r.active_regime,r.detected_regime,r.best_candidate_regime,"
+      "MAX(COALESCE(r.uptrend_score,0),COALESCE(r.sideway_score,0),"
+      "COALESCE(r.downtrend_score,0)) AS winning_score,"
+      "COALESCE(r.score_gap,0) AS score_gap,"
+      "r.regime_switch_status AS switch_status,"
+      "p.pressure_direction,p.pressure_level,p.pressure_score,"
+      "st.structure_stage,st.bos_state,st.choch_state,"
+      "st.development_state,"
+      "ROW_NUMBER() OVER(PARTITION BY tc.experiment_id,tc.symbol "
+      "ORDER BY COALESCE(tc.entry_time,tc.open_time),tc.trade_id) "
+      "AS global_sequence "
+      "FROM trade_close tc JOIN signal s "
+      "ON s.experiment_id=tc.experiment_id AND s.signal_id=tc.signal_id "
+      "LEFT JOIN regime_snapshot r "
+      "ON r.regime_snapshot_id=s.regime_snapshot_id "
+      "LEFT JOIN pressure_snapshot p "
+      "ON p.pressure_snapshot_id=s.pressure_snapshot_id "
+      "LEFT JOIN structure_snapshot st "
+      "ON st.structure_snapshot_id=s.structure_snapshot_id),sequenced AS ("
+      "SELECT raw.*,LAG(trade_id) OVER w AS previous_trade_id,"
+      "LAG(profit) OVER w AS previous_profit,"
+      "LAG(entry_time) OVER w AS previous_entry_time,"
+      "LAG(close_time) OVER w AS previous_close_time,"
+      "LAG(global_sequence) OVER w AS previous_global_sequence "
+      "FROM raw WINDOW w AS (PARTITION BY experiment_id,symbol,direction "
+      "ORDER BY entry_time,trade_id)),measured AS ("
+      "SELECT q.*,cfg.window_bars,cfg.low_score_gap,"
+      "CASE WHEN previous_entry_time IS NULL THEN NULL ELSE CAST(ROUND(("
+      "julianday(REPLACE(entry_time,'.','-'))-"
+      "julianday(REPLACE(previous_entry_time,'.','-')))*1440.0/"
+      "cfg.bar_minutes) AS INTEGER) END AS bars_since_previous_entry,"
+      "CASE WHEN previous_close_time IS NULL THEN NULL ELSE CAST(ROUND(("
+      "julianday(REPLACE(entry_time,'.','-'))-"
+      "julianday(REPLACE(previous_close_time,'.','-')))*1440.0/"
+      "cfg.bar_minutes) AS INTEGER) END AS bars_since_previous_close,"
+      "CASE WHEN COALESCE(detected_regime,'UNKNOWN')<>"
+      "COALESCE(active_regime,'UNKNOWN') THEN 1 ELSE 0 END AS w_detected,"
+      "CASE WHEN COALESCE(best_candidate_regime,'UNKNOWN')<>"
+      "COALESCE(active_regime,'UNKNOWN') THEN 1 ELSE 0 END AS w_best,"
+      "CASE WHEN score_gap<=cfg.low_score_gap THEN 1 ELSE 0 END AS w_gap,"
+      "CASE WHEN UPPER(COALESCE(switch_status,'')) IN "
+      "('DETECTED_ONLY','CONFIRMING','HOLDING') THEN 1 ELSE 0 END "
+      "AS w_switch,"
+      "CASE WHEN (direction='BUY' AND pressure_direction='DOWN') OR "
+      "(direction='SELL' AND pressure_direction='UP') "
+      "THEN 1 ELSE 0 END AS w_pressure_direction,"
+      "CASE WHEN pressure_level IN ('MEDIUM','HIGH') "
+      "THEN 1 ELSE 0 END AS w_pressure_level,"
+      "CASE WHEN UPPER(COALESCE(choch_state,'')) NOT IN "
+      "('','NONE','N/A','NO CHOCH') OR "
+      "(direction='BUY' AND (UPPER(COALESCE(bos_state,'')) LIKE '%DOWN%' "
+      "OR UPPER(COALESCE(bos_state,'')) LIKE '%BEAR%')) OR "
+      "(direction='SELL' AND (UPPER(COALESCE(bos_state,'')) LIKE '%UP%' "
+      "OR UPPER(COALESCE(bos_state,'')) LIKE '%BULL%')) "
+      "THEN 1 ELSE 0 END AS w_structure,"
+      "CASE WHEN direction='BUY' AND ("
+      "UPPER(COALESCE(development_state,'')) LIKE '%DOWN%' OR "
+      "UPPER(COALESCE(development_state,'')) LIKE '%BEAR%' OR "
+      "UPPER(COALESCE(development_state,'')) LIKE '%SELL%') THEN 1 "
+      "WHEN direction='SELL' AND ("
+      "UPPER(COALESCE(development_state,'')) LIKE '%UP%' OR "
+      "UPPER(COALESCE(development_state,'')) LIKE '%BULL%' OR "
+      "UPPER(COALESCE(development_state,'')) LIKE '%BUY%') THEN 1 "
+      "ELSE 0 END AS w_development "
+      "FROM sequenced q JOIN settings cfg "
+      "ON cfg.experiment_id=q.experiment_id),warnings AS ("
+      "SELECT measured.*,(w_detected+w_best+w_gap+w_switch+"
+      "w_pressure_direction+w_pressure_level+w_structure+w_development) "
+      "AS transition_warning_count,RTRIM("
+      "CASE WHEN w_detected=1 THEN 'DETECTED_ACTIVE_MISMATCH;' ELSE '' END||"
+      "CASE WHEN w_best=1 THEN 'BEST_ACTIVE_MISMATCH;' ELSE '' END||"
+      "CASE WHEN w_gap=1 THEN 'LOW_SCORE_GAP;' ELSE '' END||"
+      "CASE WHEN w_switch=1 THEN 'SWITCH_TRANSITION;' ELSE '' END||"
+      "CASE WHEN w_pressure_direction=1 THEN 'OPPOSING_PRESSURE;' ELSE '' END||"
+      "CASE WHEN w_pressure_level=1 THEN 'MEDIUM_HIGH_PRESSURE;' ELSE '' END||"
+      "CASE WHEN w_structure=1 THEN 'CHOCH_OR_OPPOSITE_BOS;' ELSE '' END||"
+      "CASE WHEN w_development=1 THEN 'OPPOSING_DEVELOPMENT;' ELSE '' END,"
+      "';') AS transition_warning_reason FROM measured) "
+      "SELECT experiment_id,trade_id,signal_id,direction,entry_time,"
+      "close_time,profit,previous_trade_id,previous_profit,"
+      "bars_since_previous_entry,bars_since_previous_close,"
+      "active_regime,detected_regime,best_candidate_regime,"
+      "winning_score,score_gap,switch_status,pressure_direction,"
+      "pressure_level,pressure_score,structure_stage,bos_state,"
+      "choch_state,development_state,transition_warning_count,"
+      "transition_warning_reason,CASE "
+      "WHEN profit<0 AND previous_profit<0 AND "
+      "((global_sequence-previous_global_sequence)=1 OR "
+      "bars_since_previous_entry BETWEEN 0 AND window_bars) "
+      "AND transition_warning_count>=3 THEN 'HIGH_RISK_DOUBLE_ENTRY' "
+      "WHEN profit<0 AND previous_profit<0 AND "
+      "((global_sequence-previous_global_sequence)=1 OR "
+      "bars_since_previous_entry BETWEEN 0 AND window_bars) "
+      "AND transition_warning_count>=1 THEN 'TRANSITION_REPEAT_LOSS' "
+      "WHEN profit<0 AND previous_profit<0 AND "
+      "((global_sequence-previous_global_sequence)=1 OR "
+      "bars_since_previous_entry BETWEEN 0 AND window_bars) "
+      "THEN 'REPEAT_LOSS' ELSE 'NORMAL' END AS risk_label "
+      "FROM warnings";
+}
+
+string ResearchDBViewTransitionDoubleEntrySummary()
+{
+   return
+      "CREATE VIEW IF NOT EXISTS v_transition_double_entry_summary AS "
+      "SELECT experiment_id,direction,active_regime,detected_regime,"
+      "pressure_level,risk_label,COUNT(*) AS trade_count,"
+      "SUM(CASE WHEN profit>0 THEN 1 ELSE 0 END) AS win_count,"
+      "SUM(CASE WHEN profit<0 THEN 1 ELSE 0 END) AS loss_count,"
+      "100.0*SUM(CASE WHEN profit>0 THEN 1 ELSE 0 END)/"
+      "NULLIF(COUNT(*),0) AS win_rate,"
+      "COALESCE(SUM(CASE WHEN profit>0 THEN profit ELSE 0 END),0) "
+      "AS gross_profit,"
+      "COALESCE(SUM(CASE WHEN profit<0 THEN profit ELSE 0 END),0) "
+      "AS gross_loss,"
+      "SUM(CASE WHEN profit>0 THEN profit ELSE 0 END)/"
+      "NULLIF(-SUM(CASE WHEN profit<0 THEN profit ELSE 0 END),0) "
+      "AS profit_factor,AVG(profit) AS avg_profit,"
+      "MIN(CASE WHEN profit<0 THEN profit END) AS max_loss,"
+      "SUM(CASE WHEN risk_label<>'NORMAL' AND profit<0 "
+      "THEN 1 ELSE 0 END) AS consecutive_loss_count,"
+      "SUM(CASE WHEN risk_label IN "
+      "('TRANSITION_REPEAT_LOSS','HIGH_RISK_DOUBLE_ENTRY') "
+      "THEN 1 ELSE 0 END) AS blocked_candidate_count_estimate "
+      "FROM v_transition_double_entry_risk GROUP BY experiment_id,"
+      "direction,active_regime,detected_regime,pressure_level,risk_label";
+}
+
+string ResearchDBViewTradeOutlierAnalysis()
+{
+   return
+      "CREATE VIEW IF NOT EXISTS vw_trade_outlier_analysis AS "
+      "/* V2 SOURCE: normalize stable tables without optional audit columns. */ "
+      "WITH trade_history AS ("
+      "SELECT tc.experiment_id,tc.trade_id,tc.signal_id,tc.symbol,"
+      "tc.direction,tc.open_time,tc.close_time,tc.bars_held,"
+      "tc.holding_minutes,tc.open_price,tc.close_price,tc.volume,"
+      "tc.profit,tc.profit_points,tc.swap,tc.commission,tc.exit_reason "
+      "FROM trade_close tc),"
+      "trade_audit AS ("
+      "/* V2 AUDIT: derive point size and expectations from stable trade_open. */ "
+      "SELECT h.experiment_id,h.trade_id,"
+      "COALESCE(t.planned_risk_points,0) AS expected_sl_points,"
+      "COALESCE(t.planned_reward_points,0) AS expected_tp_points,"
+      "CASE WHEN ABS(COALESCE(t.planned_risk_points,0))>0 "
+      "AND ABS(COALESCE(t.sl,0)-COALESCE(t.open_price,0))>0 "
+      "THEN ABS(t.sl-t.open_price)/ABS(t.planned_risk_points) "
+      "WHEN ABS(COALESCE(t.planned_reward_points,0))>0 "
+      "AND ABS(COALESCE(t.tp,0)-COALESCE(t.open_price,0))>0 "
+      "THEN ABS(t.tp-t.open_price)/ABS(t.planned_reward_points) "
+      "ELSE NULL END AS symbol_point,"
+      "CASE WHEN ABS(COALESCE(h.profit_points,0))>0.00000001 "
+      "THEN -ABS(t.planned_risk_points)*"
+      "ABS(h.profit/h.profit_points) ELSE NULL END "
+      "AS expected_loss_usd,"
+      "CASE WHEN ABS(COALESCE(h.profit_points,0))>0.00000001 "
+      "THEN ABS(t.planned_reward_points)*"
+      "ABS(h.profit/h.profit_points) ELSE NULL END "
+      "AS expected_profit_usd,"
+      "CASE WHEN h.exit_reason='TP' AND "
+      "ABS(h.profit_points-t.planned_reward_points)>1 "
+      "THEN 'TP_DISTANCE_MISMATCH' "
+      "WHEN h.exit_reason='SL' AND "
+      "ABS(h.profit_points+t.planned_risk_points)>1 "
+      "THEN 'SL_DISTANCE_MISMATCH' "
+      "WHEN h.exit_reason='TIMEOUT' THEN 'TIMEOUT_EXIT' "
+      "WHEN h.exit_reason='TESTER_CLOSE' THEN 'TESTER_CLOSE' "
+      "ELSE COALESCE(h.exit_reason,'UNKNOWN') END AS audit_reason "
+      "FROM trade_history h LEFT JOIN trade_open t "
+      "ON t.experiment_id=h.experiment_id AND t.trade_id=h.trade_id),"
+      "context AS ("
+      "/* V2 CONTEXT: optional market snapshots remain nullable LEFT JOINs. */ "
+      "SELECT h.*,a.expected_sl_points,a.expected_tp_points,"
+      "a.symbol_point,a.expected_loss_usd,a.expected_profit_usd,"
+      "a.audit_reason,"
+      "(h.profit+COALESCE(h.swap,0)+COALESCE(h.commission,0)) "
+      "AS actual_profit_usd,s.atr_value,s.spread_points,"
+      "p.pressure_direction,p.pressure_level,p.pressure_score,"
+      "z.zone_id,z.zone_score,p.ema_value,"
+      "(SELECT CAST(pr.value AS INTEGER) FROM parameter pr "
+      "WHERE pr.experiment_id=h.experiment_id "
+      "AND pr.name='SwingDepth' ORDER BY pr.parameter_id DESC LIMIT 1) "
+      "AS swing_depth "
+      "FROM trade_history h LEFT JOIN trade_audit a "
+      "ON a.experiment_id=h.experiment_id AND a.trade_id=h.trade_id "
+      "LEFT JOIN signal s ON s.experiment_id=h.experiment_id "
+      "AND s.signal_id=h.signal_id "
+      "LEFT JOIN pressure_snapshot p "
+      "ON p.pressure_snapshot_id=s.pressure_snapshot_id "
+      "LEFT JOIN zone_snapshot z "
+      "ON z.zone_snapshot_id=s.zone_snapshot_id),"
+      "ratios AS ("
+      "/* V1 MONEY ANALYSIS: preserve the original outlier contract. */ "
+      "SELECT context.*,CASE WHEN actual_profit_usd>=0 "
+      "THEN actual_profit_usd/NULLIF(expected_profit_usd,0) "
+      "ELSE ABS(actual_profit_usd)/NULLIF(ABS(expected_loss_usd),0) "
+      "END AS profit_ratio FROM context),"
+      "classified AS ("
+      "SELECT ratios.*,ABS(profit_ratio) AS absolute_ratio,"
+      "CASE WHEN actual_profit_usd>=0 "
+      "THEN actual_profit_usd-expected_profit_usd "
+      "ELSE ABS(actual_profit_usd)-ABS(expected_loss_usd) END "
+      "AS deviation_usd FROM ratios),"
+      "price_time AS ("
+      "/* V2 PRICE/TIME: calculate theoretical prices and elapsed time. */ "
+      "SELECT classified.*,"
+      "COALESCE(holding_minutes,("
+      "julianday(REPLACE(close_time,'.','-'))-"
+      "julianday(REPLACE(open_time,'.','-')))*1440.0) "
+      "AS holding_minutes_v2,"
+      "CASE WHEN UPPER(direction)='BUY' "
+      "THEN open_price-expected_sl_points*symbol_point "
+      "WHEN UPPER(direction)='SELL' "
+      "THEN open_price+expected_sl_points*symbol_point END "
+      "AS expected_sl_price,"
+      "CASE WHEN UPPER(direction)='BUY' "
+      "THEN open_price+expected_tp_points*symbol_point "
+      "WHEN UPPER(direction)='SELL' "
+      "THEN open_price-expected_tp_points*symbol_point END "
+      "AS expected_tp_price,"
+      "ABS(close_price-open_price)/NULLIF(symbol_point,0) "
+      "AS actual_distance_points,"
+      "CASE WHEN actual_profit_usd>=0 THEN expected_tp_points "
+      "ELSE expected_sl_points END AS expected_distance_points "
+      "FROM classified),"
+      "execution_metrics AS ("
+      "/* V2 EXECUTION: normalize distance, schedule, and volatility metrics. */ "
+      "SELECT price_time.*,"
+      "ABS(actual_distance_points-expected_distance_points) "
+      "AS distance_error_points,"
+      "100.0*ABS(actual_distance_points-expected_distance_points)/"
+      "NULLIF(ABS(expected_distance_points),0) "
+      "AS distance_error_percent,"
+      "holding_minutes_v2/60.0 AS holding_hours,"
+      "holding_minutes_v2/1440.0 AS holding_days,"
+      "CAST(strftime('%w',REPLACE(open_time,'.','-')) AS INTEGER) "
+      "AS open_day_number,"
+      "CAST(strftime('%w',REPLACE(close_time,'.','-')) AS INTEGER) "
+      "AS close_day_number,"
+      "CAST(strftime('%H',REPLACE(open_time,'.','-')) AS INTEGER) "
+      "AS open_hour_number,"
+      "CAST(strftime('%H',REPLACE(close_time,'.','-')) AS INTEGER) "
+      "AS close_hour_number,"
+      "ABS(atr_value/NULLIF(symbol_point,0))/"
+      "NULLIF(ABS(expected_sl_points),0) AS atr_percent_of_sl,"
+      "ABS(spread_points)/NULLIF(ABS(expected_sl_points),0) "
+      "AS spread_percent_of_sl "
+      "FROM price_time),"
+      "quality AS ("
+      "/* V2 QUALITY: derive weekend/session and execution classification. */ "
+      "SELECT execution_metrics.*,"
+      "CASE WHEN (open_day_number=5 AND close_day_number=1) "
+      "OR holding_days>=2 THEN 1 ELSE 0 END AS is_weekend_hold,"
+      "CASE WHEN open_hour_number>=0 AND open_hour_number<7 "
+      "THEN 'Asian' WHEN open_hour_number>=7 AND open_hour_number<13 "
+      "THEN 'London' WHEN open_hour_number>=13 AND open_hour_number<21 "
+      "THEN 'NewYork' ELSE 'AfterHours' END AS trading_session,"
+      "CASE WHEN distance_error_percent<2 THEN 'PERFECT' "
+      "WHEN distance_error_percent<5 THEN 'GOOD' "
+      "WHEN distance_error_percent<10 THEN 'WARNING' "
+      "ELSE 'BAD' END AS execution_quality "
+      "FROM execution_metrics),"
+      "root_cause AS ("
+      "/* V2 ROOT CAUSE: apply the requested precedence without gating trades. */ "
+      "SELECT quality.*,CASE WHEN is_weekend_hold=1 THEN 'Weekend Gap' "
+      "WHEN spread_percent_of_sl>0.20 THEN 'Large Spread' "
+      "WHEN distance_error_percent>10 THEN 'Execution' "
+      "WHEN holding_hours>24 THEN 'Long Holding' "
+      "WHEN atr_percent_of_sl>0.80 THEN 'Extreme Volatility' "
+      "ELSE 'Unknown' END AS root_cause_text FROM quality) "
+      "/* V1 OUTPUT: retain every original column in its original order. */ "
+      "SELECT trade_id AS TradeID,symbol AS Symbol,"
+      "direction AS Direction,REPLACE(open_time,'.','-') AS OpenTime,"
+      "REPLACE(close_time,'.','-') AS CloseTime,"
+      "CAST(ROUND(holding_minutes_v2) AS INTEGER) "
+      "AS HoldingMinutes,bars_held AS HoldingBars,"
+      "open_price AS OpenPrice,close_price AS ClosePrice,volume AS Lot,"
+      "expected_sl_points AS ExpectedSLPoints,"
+      "expected_tp_points AS ExpectedTPPoints,"
+      "ROUND(expected_loss_usd,2) AS ExpectedLossUSD,"
+      "ROUND(expected_profit_usd,2) AS ExpectedProfitUSD,"
+      "ROUND(actual_profit_usd,2) AS ActualProfitUSD,"
+      "ROUND(profit_ratio,2) AS ProfitRatio,"
+      "ROUND(absolute_ratio,2) AS AbsoluteRatio,"
+      "exit_reason AS ExitReason,audit_reason AS AuditReason,"
+      "atr_value AS ATR,spread_points AS Spread,"
+      "TRIM(COALESCE(pressure_direction,'UNKNOWN')||' '||"
+      "COALESCE(pressure_level,'UNKNOWN')||' '||"
+      "ROUND(COALESCE(pressure_score,0),1)) AS Pressure,"
+      "zone_id AS ZoneID,zone_score AS ZoneScore,"
+      "swing_depth AS SwingDepth,ema_value AS MA,"
+      "CASE WHEN absolute_ratio>=4 THEN 'CRITICAL' "
+      "WHEN absolute_ratio>=2 THEN 'HIGH' "
+      "WHEN absolute_ratio>=1.2 THEN 'MEDIUM' "
+      "ELSE 'NORMAL' END AS OutlierLevel,"
+      "ROUND(deviation_usd,2) AS DeviationUSD,"
+      "/* V2 PRICE ANALYSIS. */ "
+      "ROUND(expected_sl_price,8) AS ExpectedSLPrice,"
+      "ROUND(expected_tp_price,8) AS ExpectedTPPrice,"
+      "ROUND(close_price,8) AS ActualExitPrice,"
+      "ROUND(ABS(close_price-expected_sl_price),8) "
+      "AS SLPriceDifference,"
+      "ROUND(ABS(close_price-expected_tp_price),8) "
+      "AS TPPriceDifference,"
+      "ROUND(expected_distance_points,1) AS ExpectedDistancePoints,"
+      "ROUND(actual_distance_points,1) AS ActualDistancePoints,"
+      "ROUND(distance_error_points,1) AS DistanceErrorPoints,"
+      "ROUND(distance_error_percent,2) AS DistanceErrorPercent,"
+      "/* V2 TIME AND SESSION ANALYSIS. */ "
+      "CASE open_day_number WHEN 0 THEN 'Sunday' WHEN 1 THEN 'Monday' "
+      "WHEN 2 THEN 'Tuesday' WHEN 3 THEN 'Wednesday' "
+      "WHEN 4 THEN 'Thursday' WHEN 5 THEN 'Friday' "
+      "WHEN 6 THEN 'Saturday' END AS OpenDayOfWeek,"
+      "CASE close_day_number WHEN 0 THEN 'Sunday' WHEN 1 THEN 'Monday' "
+      "WHEN 2 THEN 'Tuesday' WHEN 3 THEN 'Wednesday' "
+      "WHEN 4 THEN 'Thursday' WHEN 5 THEN 'Friday' "
+      "WHEN 6 THEN 'Saturday' END AS CloseDayOfWeek,"
+      "open_hour_number AS OpenHour,close_hour_number AS CloseHour,"
+      "ROUND(holding_hours,2) AS HoldingHours,"
+      "ROUND(holding_days,2) AS HoldingDays,"
+      "is_weekend_hold AS IsWeekendHold,"
+      "trading_session AS TradingSession,"
+      "/* V2 VOLATILITY, QUALITY, AND ROOT CAUSE. */ "
+      "ROUND(atr_percent_of_sl,2) AS ATRPercentOfSL,"
+      "ROUND(spread_percent_of_sl,2) AS SpreadPercentOfSL,"
+      "execution_quality AS ExecutionQuality,"
+      "root_cause_text AS RootCause "
+      "FROM root_cause WHERE absolute_ratio>=1.20 "
+      "ORDER BY absolute_ratio DESC,ABS(actual_profit_usd) DESC";
+}
+
+string ResearchDBViewTradeOutlierSummary()
+{
+   return
+      "CREATE VIEW IF NOT EXISTS vw_trade_outlier_summary AS "
+      "/* Summarize all closed trades against filtered outlier rows. */ "
+      "WITH totals AS (SELECT COUNT(*) AS total_trades "
+      "FROM trade_close),outliers AS ("
+      "SELECT * FROM vw_trade_outlier_analysis) "
+      "SELECT totals.total_trades AS TotalTrades,"
+      "COUNT(outliers.TradeID) AS OutlierTrades,"
+      "ROUND(100.0*COUNT(outliers.TradeID)/"
+      "NULLIF(totals.total_trades,0),2) AS OutlierPercent,"
+      "COALESCE(SUM(CASE WHEN outliers.OutlierLevel='CRITICAL' "
+      "THEN 1 ELSE 0 END),0) AS CriticalCount,"
+      "COALESCE(SUM(CASE WHEN outliers.OutlierLevel='HIGH' "
+      "THEN 1 ELSE 0 END),0) AS HighCount,"
+      "COALESCE(SUM(CASE WHEN outliers.OutlierLevel='MEDIUM' "
+      "THEN 1 ELSE 0 END),0) AS MediumCount,"
+      "ROUND(MIN(CASE WHEN outliers.ActualProfitUSD<0 "
+      "THEN outliers.ActualProfitUSD END),2) AS LargestLoss,"
+      "ROUND(MAX(CASE WHEN outliers.ActualProfitUSD>0 "
+      "THEN outliers.ActualProfitUSD END),2) AS LargestProfit,"
+      "ROUND(AVG(outliers.HoldingMinutes),2) AS AverageHoldingMinutes,"
+      "ROUND(AVG(outliers.HoldingBars),2) AS AverageHoldingBars,"
+      "/* V2 ROOT-CAUSE COUNTS. */ "
+      "COALESCE(SUM(CASE WHEN outliers.RootCause='Weekend Gap' "
+      "THEN 1 ELSE 0 END),0) AS WeekendGapCount,"
+      "COALESCE(SUM(CASE WHEN outliers.RootCause='Execution' "
+      "THEN 1 ELSE 0 END),0) AS ExecutionIssueCount,"
+      "COALESCE(SUM(CASE WHEN outliers.RootCause='Long Holding' "
+      "THEN 1 ELSE 0 END),0) AS LongHoldingCount,"
+      "COALESCE(SUM(CASE WHEN outliers.RootCause='Large Spread' "
+      "THEN 1 ELSE 0 END),0) AS LargeSpreadCount,"
+      "COALESCE(SUM(CASE WHEN outliers.RootCause='Extreme Volatility' "
+      "THEN 1 ELSE 0 END),0) AS HighATRCount,"
+      "/* V2 DISTANCE AND HOLDING AGGREGATES. */ "
+      "ROUND(AVG(outliers.DistanceErrorPoints),1) "
+      "AS AverageDistanceError,"
+      "ROUND(MAX(outliers.DistanceErrorPoints),1) "
+      "AS MaximumDistanceError,"
+      "ROUND(AVG(outliers.HoldingHours),2) AS AverageHoldingHours,"
+      "ROUND(AVG(outliers.HoldingDays),2) AS AverageHoldingDays,"
+      "(SELECT o.TradeID FROM outliers o "
+      "WHERE o.DistanceErrorPercent IS NOT NULL "
+      "ORDER BY o.DistanceErrorPercent DESC,o.TradeID LIMIT 1) "
+      "AS WorstExecutionTradeID,"
+      "(SELECT o.TradeID FROM outliers o "
+      "WHERE o.DistanceErrorPercent IS NOT NULL "
+      "ORDER BY o.DistanceErrorPercent ASC,o.TradeID LIMIT 1) "
+      "AS BestExecutionTradeID "
+      "FROM totals LEFT JOIN outliers ON 1=1";
+}
+
+string ResearchDBViewTradeExecutionQuality()
+{
+   return
+      "CREATE VIEW IF NOT EXISTS vw_trade_execution_quality AS "
+      "/* V2 EXECUTION QUALITY: ranked forensic projection only. */ "
+      "SELECT TradeID,ExecutionQuality,RootCause,DistanceErrorPoints,"
+      "DistanceErrorPercent,HoldingHours,HoldingDays,TradingSession,"
+      "ROW_NUMBER() OVER (ORDER BY DistanceErrorPercent DESC,"
+      "TradeID) AS ExecutionRank "
+      "FROM vw_trade_outlier_analysis "
+      "ORDER BY DistanceErrorPercent DESC,TradeID";
+}
+
+string ResearchDBViewTradeWeekendGap()
+{
+   return
+      "CREATE VIEW IF NOT EXISTS vw_trade_weekend_gap AS "
+      "/* V2 WEEKEND GAP: Friday-to-Monday or two-day holding outliers. */ "
+      "SELECT TradeID,OpenTime,CloseTime,HoldingDays,"
+      "ActualProfitUSD AS ActualProfit,"
+      "ExpectedProfitUSD AS ExpectedProfit,DistanceErrorPercent,"
+      "ExecutionQuality,RootCause "
+      "FROM vw_trade_outlier_analysis WHERE IsWeekendHold=1 "
+      "ORDER BY DistanceErrorPercent DESC,TradeID";
+}
+
 bool ResearchDBStoreViewDefinition(string name, string description,
                                    string sql)
 {
@@ -1662,7 +2716,7 @@ bool ResearchDBStoreViewDefinition(string name, string description,
 
 void ResearchDBPrepareAnalysisViews()
 {
-   string names[20] =
+   string names[33] =
    {
       "v_signal_lifecycle",
       "v_pressure_advice_vs_execution",
@@ -1683,9 +2737,22 @@ void ResearchDBPrepareAnalysisViews()
       "v_trade_distribution",
       "v_trade_anomaly",
       "v_trade_episode",
-      "v_research_validation"
+      "v_research_validation",
+      "v_transition_double_entry_risk",
+      "v_transition_double_entry_summary",
+      "vw_trade_outlier_analysis",
+      "vw_trade_outlier_summary",
+      "vw_trade_execution_quality",
+      "vw_trade_weekend_gap",
+      "vw_adaptive_loss_cluster_metrics",
+      "vw_adaptive_episode_summary",
+      "vw_adaptive_episode_detail",
+      "vw_adaptive_pattern_summary",
+      "vw_adaptive_shadow_summary",
+      "vw_adaptive_episode_shadow_result",
+      "vw_adaptive_pattern_shadow_result"
    };
-   string descriptions[20] =
+   string descriptions[33] =
    {
       "Signal context, policy, and realized trade lifecycle",
       "Pressure advice compared with actual execution",
@@ -1706,9 +2773,22 @@ void ResearchDBPrepareAnalysisViews()
       "Trade result, exit reason, and profit distribution",
       "Expected versus realized TP and SL anomaly detection",
       "Future trade episode analysis infrastructure",
-      "One-row research database integrity summary"
+      "One-row research database integrity summary",
+      "Repeated same-direction loss risk near regime, pressure, or structure transitions",
+      "Grouped performance and estimated block candidates for transition double-entry risk",
+      "V2 abnormal profit, price distance, time, volatility, execution quality, and root cause",
+      "V2 counts, causes, distance errors, holding averages, and execution extremes",
+      "Ranked V2 execution quality for trade outliers",
+      "V2 weekend and multi-day holding gap outliers",
+      "Adaptive V1 evaluation, candidate, opportunity, execution, and lifecycle metrics",
+      "Adaptive episode totals, states, opportunity counts, and leading patterns",
+      "Adaptive episode lifecycle timing and blocked-opportunity rate",
+      "Adaptive Direction and Zone episode performance summary",
+      "Research-only Adaptive shadow trade outcome totals",
+      "Adaptive episode usefulness from linked shadow outcomes",
+      "Direction and Zone Adaptive benefit from shadow outcomes"
    };
-   string sql[20];
+   string sql[33];
    sql[0] = ResearchDBViewSignalLifecycle();
    sql[1] = ResearchDBViewPressureAdviceExecution();
    sql[2] = ResearchDBViewPressureShadowValue();
@@ -1729,14 +2809,36 @@ void ResearchDBPrepareAnalysisViews()
    sql[17] = ResearchDBViewTradeAnomaly();
    sql[18] = ResearchDBViewTradeEpisode();
    sql[19] = ResearchDBViewResearchValidation();
+   sql[20] = ResearchDBViewTransitionDoubleEntryRisk();
+   sql[21] = ResearchDBViewTransitionDoubleEntrySummary();
+   sql[22] = ResearchDBViewTradeOutlierAnalysis();
+   sql[23] = ResearchDBViewTradeOutlierSummary();
+   sql[24] = ResearchDBViewTradeExecutionQuality();
+   sql[25] = ResearchDBViewTradeWeekendGap();
+   sql[26] = ResearchDBViewAdaptiveLossClusterMetrics();
+   sql[27] = ResearchDBViewAdaptiveEpisodeSummary();
+   sql[28] = ResearchDBViewAdaptiveEpisodeDetail();
+   sql[29] = ResearchDBViewAdaptivePatternSummary();
+   sql[30] = ResearchDBViewAdaptiveShadowSummary();
+   sql[31] = ResearchDBViewAdaptiveEpisodeShadowResult();
+   sql[32] = ResearchDBViewAdaptivePatternShadowResult();
 
    ResearchDBActualViewCreateStatusText = "CREATED";
    ResearchDBLastViewCreateErrorText = "N/A";
-   for(int i = 0; i < 20; i++)
+   for(int i = 0; i < 33; i++)
    {
       if(!ResearchDBStoreViewDefinition(
             names[i], descriptions[i], sql[i]))
          continue;
+
+      // Adaptive analytics evolved during Alpha 1.0 research. Recreate only
+      // these views so existing databases cannot retain misleading wording.
+      if(i >= 26)
+      {
+         DatabaseExecute(
+            TREResearchDBHandle,
+            "DROP VIEW IF EXISTS " + names[i]);
+      }
 
       ResetLastError();
       if(!DatabaseExecute(TREResearchDBHandle, sql[i]))
@@ -2478,6 +3580,297 @@ void ResearchDBLinkTradeToSignal(long signalId, long tradeId)
          "Executed trade could not create an originating signal snapshot");
 }
 
+void ResearchDBAppendSnapshotField(string &columns,
+                                   string &values,
+                                   string name,
+                                   string value)
+{
+   if(columns != "")
+   {
+      columns += ",";
+      values += ",";
+   }
+   columns += name;
+   values += value;
+}
+
+bool ResearchDBStorePendingMarketSnapshot(long tradeId)
+{
+   if(!ResearchDBCanWrite() ||
+      !TREMarketSnapshotReady ||
+      !TREMarketSnapshotLocked)
+   {
+      return false;
+   }
+   if(tradeId > 0)
+      TREPendingMarketSnapshot.tradeId = tradeId;
+   if(TREPendingMarketSnapshot.tradeId <= 0)
+      return false;
+
+   TRE_TradeMarketSnapshot snapshot = TREPendingMarketSnapshot;
+   string columns = "";
+   string values = "";
+
+   // GENERAL
+   ResearchDBAppendSnapshotField(
+      columns, values, "TradeID",
+      ResearchDBSQLInteger(snapshot.tradeId));
+   ResearchDBAppendSnapshotField(
+      columns, values, "MagicNumber",
+      ResearchDBSQLInteger(snapshot.magicNumber));
+   ResearchDBAppendSnapshotField(
+      columns, values, "Symbol",
+      ResearchDBSQLText(snapshot.symbol));
+   ResearchDBAppendSnapshotField(
+      columns, values, "Timeframe",
+      ResearchDBSQLInteger(snapshot.timeframe));
+   ResearchDBAppendSnapshotField(
+      columns, values, "OpenTime",
+      ResearchDBSQLText(ResearchDBTimeText(snapshot.openTime)));
+   ResearchDBAppendSnapshotField(
+      columns, values, "Direction",
+      ResearchDBSQLInteger(snapshot.direction));
+   ResearchDBAppendSnapshotField(
+      columns, values, "Lot",
+      ResearchDBSQLDouble(snapshot.lot));
+   ResearchDBAppendSnapshotField(
+      columns, values, "EntryPrice",
+      ResearchDBSQLDouble(snapshot.entryPrice));
+
+   // MARKET STRUCTURE
+   ResearchDBAppendSnapshotField(
+      columns, values, "CurrentSwingDirection",
+      ResearchDBSQLInteger(snapshot.currentSwingDirection));
+   ResearchDBAppendSnapshotField(
+      columns, values, "CurrentSwingDepth",
+      ResearchDBSQLInteger(snapshot.currentSwingDepth));
+   ResearchDBAppendSnapshotField(
+      columns, values, "CurrentSwingLength",
+      ResearchDBSQLDouble(snapshot.currentSwingLength));
+   ResearchDBAppendSnapshotField(
+      columns, values, "PreviousSwingDepth",
+      ResearchDBSQLInteger(snapshot.previousSwingDepth));
+   ResearchDBAppendSnapshotField(
+      columns, values, "PreviousSwingLength",
+      ResearchDBSQLDouble(snapshot.previousSwingLength));
+   ResearchDBAppendSnapshotField(
+      columns, values, "CurrentZone",
+      ResearchDBSQLInteger(snapshot.currentZone));
+   ResearchDBAppendSnapshotField(
+      columns, values, "ZoneScore",
+      ResearchDBSQLDouble(snapshot.zoneScore));
+   ResearchDBAppendSnapshotField(
+      columns, values, "ZoneWidth",
+      ResearchDBSQLDouble(snapshot.zoneWidth));
+   ResearchDBAppendSnapshotField(
+      columns, values, "DistanceToZoneCenter",
+      ResearchDBSQLDouble(snapshot.distanceToZoneCenter));
+   ResearchDBAppendSnapshotField(
+      columns, values, "DistanceToZoneEdge",
+      ResearchDBSQLDouble(snapshot.distanceToZoneEdge));
+
+   // EMA FEATURES
+   ResearchDBAppendSnapshotField(columns, values, "EMA20",
+                                 ResearchDBSQLDouble(snapshot.ema20));
+   ResearchDBAppendSnapshotField(columns, values, "EMA50",
+                                 ResearchDBSQLDouble(snapshot.ema50));
+   ResearchDBAppendSnapshotField(columns, values, "EMA100",
+                                 ResearchDBSQLDouble(snapshot.ema100));
+   ResearchDBAppendSnapshotField(columns, values, "EMA200",
+                                 ResearchDBSQLDouble(snapshot.ema200));
+   ResearchDBAppendSnapshotField(
+      columns, values, "EMA20Slope",
+      ResearchDBSQLDouble(snapshot.ema20Slope));
+   ResearchDBAppendSnapshotField(
+      columns, values, "EMA50Slope",
+      ResearchDBSQLDouble(snapshot.ema50Slope));
+   ResearchDBAppendSnapshotField(
+      columns, values, "EMA100Slope",
+      ResearchDBSQLDouble(snapshot.ema100Slope));
+   ResearchDBAppendSnapshotField(
+      columns, values, "EMA200Slope",
+      ResearchDBSQLDouble(snapshot.ema200Slope));
+   ResearchDBAppendSnapshotField(
+      columns, values, "EMA20Above50",
+      ResearchDBSQLInteger(snapshot.ema20Above50));
+   ResearchDBAppendSnapshotField(
+      columns, values, "EMA50Above100",
+      ResearchDBSQLInteger(snapshot.ema50Above100));
+   ResearchDBAppendSnapshotField(
+      columns, values, "EMA100Above200",
+      ResearchDBSQLInteger(snapshot.ema100Above200));
+   ResearchDBAppendSnapshotField(
+      columns, values, "EMAAlignmentScore",
+      ResearchDBSQLInteger(snapshot.emaAlignmentScore));
+   ResearchDBAppendSnapshotField(
+      columns, values, "DistanceEMA20_50",
+      ResearchDBSQLDouble(snapshot.distanceEMA20_50));
+   ResearchDBAppendSnapshotField(
+      columns, values, "DistanceEMA50_100",
+      ResearchDBSQLDouble(snapshot.distanceEMA50_100));
+   ResearchDBAppendSnapshotField(
+      columns, values, "DistanceEMA100_200",
+      ResearchDBSQLDouble(snapshot.distanceEMA100_200));
+
+   // VOLATILITY AND TREND
+   ResearchDBAppendSnapshotField(columns, values, "ATR",
+                                 ResearchDBSQLDouble(snapshot.atr));
+   ResearchDBAppendSnapshotField(
+      columns, values, "ATRPercent",
+      ResearchDBSQLDouble(snapshot.atrPercent));
+   ResearchDBAppendSnapshotField(
+      columns, values, "TrueRange",
+      ResearchDBSQLDouble(snapshot.trueRange));
+   ResearchDBAppendSnapshotField(
+      columns, values, "AverageTrueRangeRatio",
+      ResearchDBSQLDouble(snapshot.averageTrueRangeRatio));
+   ResearchDBAppendSnapshotField(
+      columns, values, "DailyRange",
+      ResearchDBSQLDouble(snapshot.dailyRange));
+   ResearchDBAppendSnapshotField(
+      columns, values, "CurrentCandleRange",
+      ResearchDBSQLDouble(snapshot.currentCandleRange));
+   ResearchDBAppendSnapshotField(columns, values, "ADX",
+                                 ResearchDBSQLDouble(snapshot.adx));
+   ResearchDBAppendSnapshotField(columns, values, "PlusDI",
+                                 ResearchDBSQLDouble(snapshot.plusDI));
+   ResearchDBAppendSnapshotField(columns, values, "MinusDI",
+                                 ResearchDBSQLDouble(snapshot.minusDI));
+   ResearchDBAppendSnapshotField(
+      columns, values, "TrendStrength",
+      ResearchDBSQLDouble(snapshot.trendStrength));
+   ResearchDBAppendSnapshotField(
+      columns, values, "TrendAcceleration",
+      ResearchDBSQLDouble(snapshot.trendAcceleration));
+
+   // PRESSURE AND SESSION
+   ResearchDBAppendSnapshotField(
+      columns, values, "PressureState",
+      ResearchDBSQLInteger(snapshot.pressureState));
+   ResearchDBAppendSnapshotField(
+      columns, values, "PressureScore",
+      ResearchDBSQLDouble(snapshot.pressureScore));
+   ResearchDBAppendSnapshotField(
+      columns, values, "PressureStrength",
+      ResearchDBSQLDouble(snapshot.pressureStrength));
+   ResearchDBAppendSnapshotField(
+      columns, values, "PressureDirection",
+      ResearchDBSQLInteger(snapshot.pressureDirection));
+   ResearchDBAppendSnapshotField(
+      columns, values, "PressureAge",
+      ResearchDBSQLInteger(snapshot.pressureAge));
+   ResearchDBAppendSnapshotField(
+      columns, values, "DayOfWeek",
+      ResearchDBSQLInteger(snapshot.dayOfWeek));
+   ResearchDBAppendSnapshotField(
+      columns, values, "Hour",
+      ResearchDBSQLInteger(snapshot.hour));
+   ResearchDBAppendSnapshotField(
+      columns, values, "TradingSession",
+      ResearchDBSQLInteger(snapshot.tradingSession));
+   ResearchDBAppendSnapshotField(
+      columns, values, "IsHoliday",
+      ResearchDBSQLInteger(snapshot.isHoliday));
+   ResearchDBAppendSnapshotField(
+      columns, values, "IsWeekend",
+      ResearchDBSQLInteger(snapshot.isWeekend));
+
+   // EXECUTION AND CANDLE
+   ResearchDBAppendSnapshotField(columns, values, "Spread",
+                                 ResearchDBSQLDouble(snapshot.spread));
+   ResearchDBAppendSnapshotField(
+      columns, values, "SpreadPercentATR",
+      ResearchDBSQLDouble(snapshot.spreadPercentATR));
+   ResearchDBAppendSnapshotField(
+      columns, values, "TickSize",
+      ResearchDBSQLDouble(snapshot.tickSize));
+   ResearchDBAppendSnapshotField(
+      columns, values, "PointValue",
+      ResearchDBSQLDouble(snapshot.pointValue));
+   ResearchDBAppendSnapshotField(
+      columns, values, "Digits",
+      ResearchDBSQLInteger(snapshot.digits));
+   ResearchDBAppendSnapshotField(
+      columns, values, "CurrentOpen",
+      ResearchDBSQLDouble(snapshot.currentOpen));
+   ResearchDBAppendSnapshotField(
+      columns, values, "CurrentHigh",
+      ResearchDBSQLDouble(snapshot.currentHigh));
+   ResearchDBAppendSnapshotField(
+      columns, values, "CurrentLow",
+      ResearchDBSQLDouble(snapshot.currentLow));
+   ResearchDBAppendSnapshotField(
+      columns, values, "CurrentClose",
+      ResearchDBSQLDouble(snapshot.currentClose));
+   ResearchDBAppendSnapshotField(
+      columns, values, "BodySize",
+      ResearchDBSQLDouble(snapshot.bodySize));
+   ResearchDBAppendSnapshotField(
+      columns, values, "UpperShadow",
+      ResearchDBSQLDouble(snapshot.upperShadow));
+   ResearchDBAppendSnapshotField(
+      columns, values, "LowerShadow",
+      ResearchDBSQLDouble(snapshot.lowerShadow));
+   ResearchDBAppendSnapshotField(
+      columns, values, "Bullish",
+      ResearchDBSQLInteger(snapshot.bullish));
+   ResearchDBAppendSnapshotField(
+      columns, values, "Bearish",
+      ResearchDBSQLInteger(snapshot.bearish));
+   ResearchDBAppendSnapshotField(
+      columns, values, "DojiScore",
+      ResearchDBSQLDouble(snapshot.dojiScore));
+
+   // MULTI TIMEFRAME AND QUALITY FLAGS
+   ResearchDBAppendSnapshotField(
+      columns, values, "M15EMA50",
+      ResearchDBSQLDouble(snapshot.m15EMA50));
+   ResearchDBAppendSnapshotField(
+      columns, values, "H1EMA50",
+      ResearchDBSQLDouble(snapshot.h1EMA50));
+   ResearchDBAppendSnapshotField(
+      columns, values, "H4EMA50",
+      ResearchDBSQLDouble(snapshot.h4EMA50));
+   ResearchDBAppendSnapshotField(
+      columns, values, "D1EMA50",
+      ResearchDBSQLDouble(snapshot.d1EMA50));
+   ResearchDBAppendSnapshotField(columns, values, "H1ATR",
+                                 ResearchDBSQLDouble(snapshot.h1ATR));
+   ResearchDBAppendSnapshotField(columns, values, "H4ATR",
+                                 ResearchDBSQLDouble(snapshot.h4ATR));
+   ResearchDBAppendSnapshotField(columns, values, "D1ATR",
+                                 ResearchDBSQLDouble(snapshot.d1ATR));
+   ResearchDBAppendSnapshotField(
+      columns, values, "HasStrongTrend",
+      ResearchDBSQLInteger(snapshot.hasStrongTrend));
+   ResearchDBAppendSnapshotField(
+      columns, values, "HasHighVolatility",
+      ResearchDBSQLInteger(snapshot.hasHighVolatility));
+   ResearchDBAppendSnapshotField(
+      columns, values, "NearZoneCenter",
+      ResearchDBSQLInteger(snapshot.nearZoneCenter));
+   ResearchDBAppendSnapshotField(
+      columns, values, "NearZoneEdge",
+      ResearchDBSQLInteger(snapshot.nearZoneEdge));
+   ResearchDBAppendSnapshotField(
+      columns, values, "PressureConfirmed",
+      ResearchDBSQLInteger(snapshot.pressureConfirmed));
+   ResearchDBAppendSnapshotField(
+      columns, values, "EMAFullyAligned",
+      ResearchDBSQLInteger(snapshot.emaFullyAligned));
+
+   // INSERT OR IGNORE is the immutability guard: no UPDATE path exists.
+   string sql =
+      "INSERT OR IGNORE INTO trade_market_snapshot(" +
+      columns + ") VALUES(" + values + ")";
+   if(!ResearchDBExecute(sql, "insert immutable trade market snapshot"))
+      return false;
+
+   MarketSnapshotConsume(snapshot.tradeId);
+   ResearchDBLastWriteTimeText = ResearchDBTimeText(TimeCurrent());
+   return true;
+}
+
 void ResearchDBCaptureOpenTrades(string symbol)
 {
    if(!ResearchDBCanWrite() || !ResearchDBWriteTrades)
@@ -2485,6 +3878,15 @@ void ResearchDBCaptureOpenTrades(string symbol)
 
    int total = PositionsTotal();
    double point = SymbolInfoDouble(symbol, SYMBOL_POINT);
+   double tickSize =
+      SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_SIZE);
+   double tickValue =
+      SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_VALUE);
+   MqlTick entryTick;
+   ZeroMemory(entryTick);
+   SymbolInfoTick(symbol, entryTick);
+   double spreadAtEntry =
+      (point > 0) ? (entryTick.ask - entryTick.bid) / point : 0;
    for(int i = 0; i < total; i++)
    {
       ulong ticket = PositionGetTicket(i);
@@ -2533,6 +3935,14 @@ void ResearchDBCaptureOpenTrades(string symbol)
       trade.openPrice = PositionGetDouble(POSITION_PRICE_OPEN);
       trade.stopLoss = PositionGetDouble(POSITION_SL);
       trade.takeProfit = PositionGetDouble(POSITION_TP);
+      trade.requestedSLPoints = ExecutionRequestedSLPoints;
+      trade.requestedTPPoints = ExecutionRequestedTPPoints;
+      trade.effectiveSLPoints = ExecutionEffectiveSLPoints;
+      trade.effectiveTPPoints = ExecutionEffectiveTPPoints;
+      trade.symbolPoint = point;
+      trade.tickSize = tickSize;
+      trade.tickValue = tickValue;
+      trade.spreadAtEntry = spreadAtEntry;
       trade.plannedRR = JournalRiskReward(
          trade.type, trade.openPrice, trade.stopLoss, trade.takeProfit);
       trade.maePoints = 0;
@@ -2597,6 +4007,15 @@ void ResearchDBCaptureOpenTrades(string symbol)
       long rowId = ResearchDBInsert(sql, "insert trade open");
       if(rowId <= 0)
          continue;
+
+      if(currentExecution && TREMarketSnapshotLocked &&
+         !ResearchDBStorePendingMarketSnapshot(trade.tradeId))
+      {
+         ResearchDBInsertIntegrityEvent(
+            "MARKET_SNAPSHOT_WRITE_FAILED",
+            trade.signalId, trade.tradeId, "ERROR",
+            "Immutable pre-entry market snapshot could not be stored");
+      }
 
       TREResearchDBTrades[slot] = trade;
       ResearchDBTotalTradesOpenedWritten++;
@@ -2682,6 +4101,9 @@ bool ResearchDBReadCloseDeal(TRE_ResearchDBTrade &trade,
    if(TimeoutLastCloseResultText == "OK" &&
       trade.identifier == TimeoutLastPositionIdentifier)
       reason = "TIMEOUT";
+   else if(WeekendLastCloseResultText == "OK" &&
+           trade.identifier == WeekendLastClosedPositionIdentifier)
+      reason = "CLOSE_WEEKEND_PROTECTION";
    return found;
 }
 
@@ -2722,6 +4144,13 @@ void ResearchDBCaptureClosedTrades(string symbol)
          (exitShift >= 0) ? iTime(symbol, ExecutionTF, exitShift) : 0;
       double realizedRR = JournalRiskReward(
          trade.type, trade.openPrice, trade.stopLoss, closePrice);
+      double netProfit = profit + swap + commission;
+      TRE_TradeCloseAudit audit;
+      TRE_BuildTradeCloseAudit(
+         trade.type, trade.openPrice, trade.stopLoss, trade.takeProfit,
+         closePrice, trade.volume, trade.effectiveSLPoints,
+         trade.effectiveTPPoints, trade.symbolPoint, trade.tickSize,
+         trade.tickValue, profit, commission, swap, reason, audit);
       string direction =
          (trade.type == POSITION_TYPE_BUY) ? "BUY" : "SELL";
 
@@ -2735,7 +4164,15 @@ void ResearchDBCaptureClosedTrades(string symbol)
          "pressure_direction_at_entry,pressure_level_at_entry,"
          "pressure_score_at_entry,regime_at_entry,zone_at_entry,"
          "decision_at_entry,entry_time,entry_bar,exit_time,exit_bar,"
-         "execution_delay_seconds,execution_delay_bars) VALUES(" +
+         "execution_delay_seconds,execution_delay_bars,"
+         "requested_sl_points,requested_tp_points,"
+         "effective_sl_points,effective_tp_points,entry_price,"
+         "sl_price,tp_price,close_reason,actual_volume,symbol_point,"
+         "tick_size,tick_value,spread_at_entry,gross_profit,net_profit,"
+         "expected_loss_money,expected_profit_money,"
+         "profit_deviation_money,profit_deviation_points,"
+         "is_exact_sl_hit,is_exact_tp_hit,is_timeout_exit,"
+         "is_tester_close,audit_reason) VALUES(" +
          ResearchDBSQLInteger(ResearchDBExperimentID) + "," +
          ResearchDBSQLID(trade.signalId) + "," +
          ResearchDBSQLInteger(trade.tradeId) + "," +
@@ -2771,7 +4208,31 @@ void ResearchDBCaptureClosedTrades(string symbol)
          ResearchDBSQLText(ResearchDBTimeText(closeTime)) + "," +
          ResearchDBSQLText(ResearchDBTimeText(exitBar)) + "," +
          ResearchDBSQLInteger(trade.executionDelaySeconds) + "," +
-         ResearchDBSQLInteger(trade.executionDelayBars) + ")";
+         ResearchDBSQLInteger(trade.executionDelayBars) + "," +
+         ResearchDBSQLDouble(trade.requestedSLPoints) + "," +
+         ResearchDBSQLDouble(trade.requestedTPPoints) + "," +
+         ResearchDBSQLDouble(trade.effectiveSLPoints) + "," +
+         ResearchDBSQLDouble(trade.effectiveTPPoints) + "," +
+         ResearchDBSQLDouble(trade.openPrice) + "," +
+         ResearchDBSQLDouble(trade.stopLoss) + "," +
+         ResearchDBSQLDouble(trade.takeProfit) + "," +
+         ResearchDBSQLText(reason) + "," +
+         ResearchDBSQLDouble(trade.volume) + "," +
+         ResearchDBSQLDouble(trade.symbolPoint) + "," +
+         ResearchDBSQLDouble(trade.tickSize) + "," +
+         ResearchDBSQLDouble(trade.tickValue) + "," +
+         ResearchDBSQLDouble(trade.spreadAtEntry) + "," +
+         ResearchDBSQLDouble(profit) + "," +
+         ResearchDBSQLDouble(netProfit) + "," +
+         ResearchDBSQLDouble(audit.expectedLossMoney) + "," +
+         ResearchDBSQLDouble(audit.expectedProfitMoney) + "," +
+         ResearchDBSQLDouble(audit.profitDeviationMoney) + "," +
+         ResearchDBSQLDouble(audit.profitDeviationPoints) + "," +
+         ResearchDBSQLInteger(ResearchDBBool(audit.exactSLHit)) + "," +
+         ResearchDBSQLInteger(ResearchDBBool(audit.exactTPHit)) + "," +
+         ResearchDBSQLInteger(ResearchDBBool(audit.timeoutExit)) + "," +
+         ResearchDBSQLInteger(ResearchDBBool(audit.testerClose)) + "," +
+         ResearchDBSQLText(audit.auditReason) + ")";
       if(ResearchDBInsert(sql, "insert trade close") <= 0)
          continue;
 
@@ -2881,6 +4342,52 @@ void ResearchDBEngine(string symbol)
 {
    if(!ResearchDBCanWrite() || ResearchDBExperimentID <= 0)
       return;
+   if(TREMarketSnapshotLocked &&
+      TREPendingMarketSnapshot.tradeId > 0)
+   {
+      ResearchDBStorePendingMarketSnapshot(
+         TREPendingMarketSnapshot.tradeId);
+   }
+   static int lastWeekendAuditSerial = 0;
+   if(WeekendAuditSerial != lastWeekendAuditSerial)
+   {
+      lastWeekendAuditSerial = WeekendAuditSerial;
+      ResearchDBInsertRunNote(
+         "WeekendProtection",
+         WeekendAuditDecision,
+         WeekendAuditReason,
+         WeekendAuditDetail);
+   }
+   static int lastAdaptiveV1AuditSerial = 0;
+   if(AdaptiveV1AuditSerial - lastAdaptiveV1AuditSerial >
+      TRE_ADAPTIVE_V1_AUDIT_QUEUE)
+   {
+      lastAdaptiveV1AuditSerial =
+         AdaptiveV1AuditSerial - TRE_ADAPTIVE_V1_AUDIT_QUEUE;
+   }
+   while(lastAdaptiveV1AuditSerial < AdaptiveV1AuditSerial)
+   {
+      int auditIndex =
+         lastAdaptiveV1AuditSerial %
+         TRE_ADAPTIVE_V1_AUDIT_QUEUE;
+      ResearchDBApplyAdaptiveEpisodeAudit(
+         AdaptiveV1AuditEvent[auditIndex],
+         AdaptiveV1AuditEpisodeID[auditIndex],
+         AdaptiveV1AuditDetail[auditIndex],
+         AdaptiveV1AuditTime[auditIndex]);
+      string adaptiveNoteType =
+         (AdaptiveV1AuditEvent[auditIndex] ==
+          "RULE_VALIDATION_IGNORE")
+         ? "RuleValidation"
+         : "AdaptiveLossClusterV1";
+      ResearchDBInsertRunNote(
+         adaptiveNoteType,
+         AdaptiveV1AuditEvent[auditIndex],
+         AdaptiveV1AuditReason[auditIndex],
+         AdaptiveV1AuditDetail[auditIndex]);
+      lastAdaptiveV1AuditSerial++;
+   }
+   ResearchDBCaptureAdaptiveShadowTrades();
    bool executionSent =
       (LastExecutionAction == "BUY SENT" ||
        LastExecutionAction == "SELL SENT");
@@ -2903,12 +4410,147 @@ void ResearchDBEngine(string symbol)
    }
 }
 
+void ResearchDBWriteAdaptiveV1Summary()
+{
+   static bool written = false;
+   if(written || !ResearchDBCanWrite() ||
+      ResearchDBExperimentID <= 0)
+   {
+      return;
+   }
+   written = true;
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_V1_SUMMARY", "adaptive_v1_enabled",
+      AdaptiveV1Enabled() ? "1" : "0",
+      "Pure Direction+Zone adaptive filter enabled state");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_V1_SUMMARY", "adaptive_v1_mode",
+      AdaptiveClusterModeText(),
+      "Advanced feature similarity is reserved and inactive");
+   ResearchDBInsertRunNote(
+      "RULE_VALIDATION_SUMMARY", "ValidatedPatternCount",
+      IntegerToString(AdaptiveValidatedPatternCount),
+      "Approved loss-cluster detections that activated Adaptive V1");
+   ResearchDBInsertRunNote(
+      "RULE_VALIDATION_SUMMARY", "IgnoredPatternCount",
+      IntegerToString(AdaptiveIgnoredPatternCount),
+      "Detected loss-cluster patterns rejected by static validation");
+   ResearchDBInsertRunNote(
+      "RULE_VALIDATION_SUMMARY", "AdaptiveActivatedPattern",
+      AdaptiveActivatedPattern,
+      "Most recent approved Direction and Zone activation pattern");
+   ResearchDBInsertRunNote(
+      "RULE_VALIDATION_SUMMARY", "ConfiguredApprovedPatternCount",
+      IntegerToString(AdaptiveConfiguredApprovedPatternCount()),
+      "Number of Direction and Zone inputs enabled for activation");
+   ResearchDBInsertRunNote(
+      "RULE_VALIDATION_SUMMARY", "ConfiguredRejectedPatternCount",
+      IntegerToString(
+         12 - AdaptiveConfiguredApprovedPatternCount()),
+      "Number of Direction and Zone inputs disabled for activation");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_V1_SUMMARY", "adaptive_v1_total_evaluations",
+      IntegerToString(AdaptiveEvaluationCount),
+      "Total Adaptive V1 filter evaluations");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_V1_SUMMARY", "adaptive_v1_candidate_signals",
+      IntegerToString(AdaptiveCandidateSignalCount),
+      "Total confirmed unique order candidates before Adaptive V1");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_V1_SUMMARY", "adaptive_v1_blocked_opportunities",
+      IntegerToString(AdaptiveTotalBlockedOpportunities),
+      "Total unique confirmed candidates blocked by Adaptive V1");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_V1_SUMMARY", "adaptive_v1_executed_trades",
+      IntegerToString(AdaptiveExecutedTradeCount),
+      "Total Adaptive V1 pass candidates with accepted orders");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_V1_SUMMARY", "adaptive_v1_activations",
+      IntegerToString(AdaptiveActivationCount),
+      "Total Direction+Zone temporary blocks activated");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_V1_SUMMARY", "adaptive_v1_expires",
+      IntegerToString(AdaptiveExpireCount),
+      "Total cooldown blocks expired");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_EPISODE_SUMMARY", "adaptive_episode_count",
+      IntegerToString(AdaptiveEpisodeCount),
+      "Total Adaptive V1 activation episodes");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_EPISODE_SUMMARY",
+      "adaptive_total_blocked_opportunities",
+      IntegerToString(AdaptiveTotalBlockedOpportunities),
+      "Total confirmed candidate opportunities blocked across episodes");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_EPISODE_SUMMARY",
+      "adaptive_avg_blocked_opportunities_per_episode",
+      DoubleToString(
+         AdaptiveAverageBlockedOpportunitiesPerEpisode(), 6),
+      "Average blocked opportunities per Adaptive V1 episode");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_EPISODE_SUMMARY",
+      "adaptive_max_blocked_opportunities_per_episode",
+      IntegerToString(AdaptiveMaxBlockedOpportunitiesInEpisode),
+      "Maximum blocked opportunities observed in one episode");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_EPISODE_SUMMARY", "adaptive_most_blocked_pattern",
+      AdaptiveMostBlockedPattern,
+      "Direction and Zone episode with the most blocked opportunities");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_SHADOW_SUMMARY", "adaptive_shadow_trade_count",
+      IntegerToString(AdaptiveShadowTradeCount),
+      "Total research-only trades simulated from blocked opportunities");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_SHADOW_SUMMARY", "adaptive_shadow_net_profit",
+      DoubleToString(AdaptiveShadowNetProfit, 8),
+      "Net hypothetical result of closed Adaptive shadow trades");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_SHADOW_SUMMARY", "adaptive_shadow_profit_factor",
+      DoubleToString(AdaptiveShadowProfitFactor, 8),
+      "Gross shadow profit divided by absolute gross shadow loss");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_SHADOW_SUMMARY", "adaptive_estimated_benefit",
+      DoubleToString(AdaptiveEstimatedBenefit, 8),
+      "Negative shadow net profit; positive means blocking was beneficial");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_SHADOW_SUMMARY", "adaptive_good_block_episodes",
+      IntegerToString(AdaptiveGoodBlockEpisodes),
+      "Episodes whose closed shadow trades have negative net profit");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_SHADOW_SUMMARY", "adaptive_bad_block_episodes",
+      IntegerToString(AdaptiveBadBlockEpisodes),
+      "Episodes whose closed shadow trades have positive net profit");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_SHADOW_SUMMARY", "adaptive_best_pattern",
+      AdaptiveShadowBestPattern,
+      "Direction and Zone with the highest estimated Adaptive benefit");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_SHADOW_SUMMARY", "adaptive_worst_pattern",
+      AdaptiveShadowWorstPattern,
+      "Direction and Zone with the lowest estimated Adaptive benefit");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_V1_SUMMARY", "adaptive_v1_max_loss_cluster",
+      IntegerToString(AdaptiveV1MaxLossCluster),
+      "Maximum consecutive DEAL_PROFIT loss streak observed");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_V1_SUMMARY",
+      "adaptive_v1_last_blocked_direction",
+      AdaptiveV1DirectionText(AdaptiveV1LastBlockedDirection),
+      "Most recent blocked candidate direction");
+   ResearchDBInsertRunNote(
+      "ADAPTIVE_V1_SUMMARY", "adaptive_v1_last_blocked_zone",
+      IntegerToString(AdaptiveV1LastBlockedZone),
+      "Most recent blocked candidate zone");
+}
+
 void ResearchDBFinalize()
 {
    if(TREResearchDBHandle != INVALID_HANDLE)
    {
       if(ResearchDBExperimentID > 0)
       {
+         ResearchDBCaptureAdaptiveShadowTrades();
+         ResearchDBWriteAdaptiveV1Summary();
          ResearchDBUpdateExperimentEnd();
          ResearchDBRefreshDiagnostics();
       }

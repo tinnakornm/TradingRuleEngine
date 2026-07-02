@@ -21,6 +21,9 @@
 #include "engine/pressure_guard_engine.mqh"
 #include "engine/entry_engine.mqh"
 #include "engine/pressure_execution_block_engine.mqh"
+#include "engine/market_snapshot_engine.mqh"
+#include "engine/adaptive_loss_cluster_engine.mqh"
+#include "engine/adaptive_shadow_engine.mqh"
 #include "engine/execution_engine.mqh"
 #include "engine/trade_engine.mqh"
 #include "engine/journal_engine.mqh"
@@ -44,12 +47,15 @@ void RunEngineCycle(bool allowBacktestExecution)
    PressureGuardEngine(symbol);
    EntryEngine();
    PressureExecutionBlockEngine(symbol);
+   AdaptiveLossClusterEngine(symbol);
+   MarketSnapshotEngine(symbol);
 
    if(allowBacktestExecution)
       ExecutionEngine(symbol);
    else
       TRE_RefreshExecutionState(symbol);
 
+   AdaptiveShadowEngine(symbol);
    TradeEngine(symbol);
    JournalEngine(symbol);
    ResearchDBEngine(symbol);
@@ -79,6 +85,29 @@ int OnInit()
    Print("RegimeConfirmBars=", RegimeConfirmBars);
    Print("RegimeSwitchThreshold=", RegimeSwitchThreshold);
    Print("RegimeHoldBars=", RegimeHoldBars);
+   Print("EnableWeekendProtection=", EnableWeekendProtection);
+   Print("WeekendBlockTime=",
+         TRE_WeekendDayToText(WeekendBlockDay), " >= ",
+         TRE_WeekendHour(WeekendBlockHour), ":00");
+   Print("WeekendForceCloseTime=",
+         TRE_WeekendDayToText(WeekendBlockDay), " >= ",
+         TRE_WeekendHour(WeekendForceCloseHour), ":00");
+   Print("EnableAdaptiveLossCluster=",
+         EnableAdaptiveLossCluster);
+   Print("LossClusterThreshold=",
+         AdaptiveEffectiveThreshold());
+   Print("LossClusterCooldownBars=",
+         AdaptiveEffectiveCooldown());
+   Print("AdaptiveClusterMode=",
+         AdaptiveClusterModeText());
+   Print("UseAdvancedAdaptiveCluster=",
+         UseAdvancedAdaptiveCluster,
+         " (reserved/inactive)");
+   Print("AdaptiveRuleValidation=STATIC_V1");
+   Print("AdaptiveApprovedPatterns=",
+         AdaptiveRuleValidationPatternList(true));
+   Print("AdaptiveRejectedPatterns=",
+         AdaptiveRuleValidationPatternList(false));
    Print("InputSource=", RegimeInputSourceText);
    Print(APP_NAME, " ", APP_VERSION, " started.");
    RunEngineCycle(false);

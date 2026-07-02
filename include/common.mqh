@@ -181,6 +181,145 @@ color ActionColor(ENTRY_ACTION action)
    return clrOrange;
 }
 
+struct TRE_TradeCloseAudit
+{
+   double expectedLossMoney;
+   double expectedProfitMoney;
+   double profitDeviationMoney;
+   double profitDeviationPoints;
+   bool exactSLHit;
+   bool exactTPHit;
+   bool timeoutExit;
+   bool testerClose;
+   string auditReason;
+};
+
+void TRE_BuildTradeCloseAudit(long positionType,
+                              double entryPrice,
+                              double stopLossPrice,
+                              double takeProfitPrice,
+                              double closePrice,
+                              double actualVolume,
+                              double effectiveSLPoints,
+                              double effectiveTPPoints,
+                              double symbolPoint,
+                              double tickSize,
+                              double tickValue,
+                              double grossProfit,
+                              double commission,
+                              double swap,
+                              string closeReason,
+                              TRE_TradeCloseAudit &audit)
+{
+   audit.expectedLossMoney = 0;
+   audit.expectedProfitMoney = 0;
+   audit.profitDeviationMoney = 0;
+   audit.profitDeviationPoints = 0;
+   audit.exactSLHit = false;
+   audit.exactTPHit = false;
+   audit.timeoutExit = (closeReason == "TIMEOUT");
+   audit.testerClose = (closeReason == "TESTER_CLOSE");
+   audit.auditReason = "NON_SL_TP_EXIT";
+
+   double profitPoints = 0;
+   if(symbolPoint > 0)
+   {
+      profitPoints =
+         (positionType == POSITION_TYPE_BUY)
+         ? (closePrice - entryPrice) / symbolPoint
+         : (entryPrice - closePrice) / symbolPoint;
+   }
+
+   bool moneyModelValid =
+      (symbolPoint > 0 && tickSize > 0 && tickValue > 0 &&
+       actualVolume > 0);
+   double moneyPerPoint = 0;
+   if(moneyModelValid)
+   {
+      moneyPerPoint =
+         (symbolPoint / tickSize) * tickValue * actualVolume;
+      audit.expectedLossMoney =
+         -MathAbs(effectiveSLPoints * moneyPerPoint);
+      audit.expectedProfitMoney =
+         MathAbs(effectiveTPPoints * moneyPerPoint);
+   }
+
+   double priceTolerance =
+      (MathMax(symbolPoint, tickSize) * 0.5) + 1e-12;
+   audit.exactSLHit =
+      (stopLossPrice > 0 &&
+       MathAbs(closePrice - stopLossPrice) <= priceTolerance);
+   audit.exactTPHit =
+      (takeProfitPrice > 0 &&
+       MathAbs(closePrice - takeProfitPrice) <= priceTolerance);
+
+   if(closeReason == "TP")
+   {
+      audit.profitDeviationMoney =
+         grossProfit - audit.expectedProfitMoney;
+      audit.profitDeviationPoints =
+         profitPoints - effectiveTPPoints;
+      audit.auditReason = audit.exactTPHit
+                          ? "EXACT_TP_PRICE"
+                          : "TP_PRICE_DEVIATION_GAP_OR_TICK_ROUNDING";
+   }
+   else if(closeReason == "SL")
+   {
+      audit.profitDeviationMoney =
+         grossProfit - audit.expectedLossMoney;
+      audit.profitDeviationPoints =
+         profitPoints + effectiveSLPoints;
+      audit.auditReason = audit.exactSLHit
+                          ? "EXACT_SL_PRICE"
+                          : "SL_PRICE_DEVIATION_GAP_OR_TICK_ROUNDING";
+   }
+   else if(audit.timeoutExit)
+   {
+      audit.profitDeviationMoney =
+         moneyModelValid
+         ? grossProfit - (profitPoints * moneyPerPoint)
+         : 0;
+      audit.profitDeviationPoints = profitPoints;
+      audit.auditReason = "TIMEOUT_EXIT_BEFORE_FIXED_SL_TP";
+   }
+   else if(audit.testerClose)
+   {
+      audit.profitDeviationMoney =
+         moneyModelValid
+         ? grossProfit - (profitPoints * moneyPerPoint)
+         : 0;
+      audit.profitDeviationPoints = profitPoints;
+      audit.auditReason = "TESTER_CLOSE_BEFORE_FIXED_SL_TP";
+   }
+   else if(closeReason == "CLOSE_WEEKEND_PROTECTION")
+   {
+      audit.profitDeviationMoney =
+         moneyModelValid
+         ? grossProfit - (profitPoints * moneyPerPoint)
+         : 0;
+      audit.profitDeviationPoints = profitPoints;
+      audit.auditReason = "CLOSE_WEEKEND_PROTECTION";
+   }
+   else
+   {
+      audit.profitDeviationMoney =
+         moneyModelValid
+         ? grossProfit - (profitPoints * moneyPerPoint)
+         : 0;
+      audit.profitDeviationPoints = profitPoints;
+   }
+
+   if(!moneyModelValid)
+      audit.auditReason += ";INVALID_POINT_TICK_VALUE_OR_VOLUME";
+
+   if(effectiveSLPoints <= 0 || effectiveTPPoints <= 0)
+      audit.auditReason += ";MISSING_EFFECTIVE_SL_TP_SNAPSHOT";
+
+   if(MathAbs(commission) > 0.00000001 ||
+      MathAbs(swap) > 0.00000001)
+      audit.auditReason += ";NET_INCLUDES_COMMISSION_SWAP";
+}
+
 void ClearTREObjects()
 {
    int total = ObjectsTotal(0, 0, -1);

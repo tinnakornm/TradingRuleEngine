@@ -523,6 +523,30 @@ def generate_report(db_path: Path, output_dir: Path, summary_csv: bool) -> None:
         best_practice = read_relation(
             connection, available, "v_best_practice_candidate", warnings
         )
+        trade_anomaly = read_relation(
+            connection, available, "v_trade_anomaly", warnings
+        )
+        transition_risk = read_relation(
+            connection, available, "v_transition_double_entry_risk", warnings
+        )
+        transition_summary = read_relation(
+            connection,
+            available,
+            "v_transition_double_entry_summary",
+            warnings,
+        )
+        trade_outliers = read_relation(
+            connection, available, "vw_trade_outlier_analysis", warnings
+        )
+        trade_outlier_summary = read_relation(
+            connection, available, "vw_trade_outlier_summary", warnings
+        )
+        trade_execution_quality = read_relation(
+            connection, available, "vw_trade_execution_quality", warnings
+        )
+        trade_weekend_gap = read_relation(
+            connection, available, "vw_trade_weekend_gap", warnings
+        )
 
     overview, summary = build_run_overview(
         experiment, signal, trade_open, trade_close, trade_summary
@@ -597,6 +621,13 @@ def generate_report(db_path: Path, output_dir: Path, summary_csv: bool) -> None:
     sections: list[tuple[str, pd.DataFrame | None, str | None]] = [
         ("1. Run Overview", overview, None),
         ("2. Trade Performance", trade_summary, None),
+        ("2.1 Fixed SL/TP Result Audit", trade_anomaly, None),
+        ("2.2 Transition Double-Entry Risk", transition_risk, None),
+        ("2.3 Transition Double-Entry Summary", transition_summary, None),
+        ("2.4 Trade Outlier Analysis", trade_outliers, None),
+        ("2.5 Trade Outlier Summary", trade_outlier_summary, None),
+        ("2.6 Trade Execution Quality", trade_execution_quality, None),
+        ("2.7 Weekend Gap Analysis", trade_weekend_gap, None),
         ("3.1 Pressure Policy Summary", policy_summary, None),
         ("3.2 Pressure Saved Loss / Missed Win", saved_missed, None),
         ("3.3 Pressure Shadow Value", shadow_value, None),

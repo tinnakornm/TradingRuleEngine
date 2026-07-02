@@ -11,7 +11,7 @@
 #define TRE_STRUCTURE_SUBTAB_COUNT 5
 #define TRE_PRESSURE_SUBTAB_COUNT 1
 #define TRE_DECISION_SUBTAB_COUNT 8
-#define TRE_TRADE_SUBTAB_COUNT 3
+#define TRE_TRADE_SUBTAB_COUNT 4
 #define TRE_RESEARCH_SUBTAB_COUNT 5
 #define TRE_SUMMARY_CARD_COUNT 11
 #define TRE_DASH_CONTENT_X 170
@@ -71,6 +71,7 @@ string TradeSubTabName(int tab)
    if(tab == 0) return "Open";
    if(tab == 1) return "Pending";
    if(tab == 2) return "Execution";
+   if(tab == 3) return "History";
 
    return "Open";
 }
@@ -245,7 +246,7 @@ int DashboardPanelHeight()
       return 500;
    }
    if(ActiveDashboardTab == 4) return 360;
-   if(ActiveDashboardTab == 5) return 360;
+   if(ActiveDashboardTab == 5) return 620;
    if(ActiveDashboardTab == 6)
       return 360;
    if(ActiveDashboardTab == 7)
@@ -258,7 +259,7 @@ int DashboardPanelHeight()
 
       return 600;
    }
-   if(ActiveDashboardTab == 8) return 720;
+   if(ActiveDashboardTab == 8) return 840;
    if(ActiveDashboardTab == 9) return 360;
    if(ActiveDashboardTab == 10) return 620;
    return 1480;
@@ -1175,7 +1176,89 @@ void RenderRiskTab(string symbol)
    DashboardAddLine(row, "Max Daily Loss        : ", "N/A");
    DashboardAddLine(row, "Current Drawdown      : ", "N/A");
    DashboardAddLine(row, "Risk Score            : ", "N/A");
-   DashboardAddLine(row, "Future Parameters     : ", "Add here without changing other tabs", clrGray);
+   DashboardAddHeader(row, "[ADAPTIVE LOSS CLUSTER V1 PURE]");
+   DashboardAddLine(row, "AdaptiveLossClusterV1 : ",
+                    AdaptiveV1Enabled() ? "ON" : "OFF");
+   DashboardAddLine(row, "Mode                  : ",
+                    AdaptiveClusterModeText());
+   DashboardAddLine(row, "Rule Validation       : ", "ON / STATIC V1");
+   DashboardAddLine(row, "Approved Patterns     : ",
+                    AdaptiveRuleValidationPatternList(true));
+   DashboardAddLine(row, "Rejected Patterns     : ",
+                    AdaptiveRuleValidationPatternList(false));
+   DashboardAddLine(row, "Validated Decisions   : ",
+                    IntegerToString(AdaptiveValidatedPatternCount));
+   DashboardAddLine(row, "Ignored Decisions     : ",
+                    IntegerToString(AdaptiveIgnoredPatternCount));
+   DashboardAddLine(row, "Activated Pattern     : ",
+                    AdaptiveActivatedPattern);
+   DashboardAddLine(row, "Status                : ",
+                    AdaptiveV1StatusText,
+                    AdaptiveV1BlockActive ? clrRed : clrGray);
+   DashboardAddLine(row, "CurrentLossStreak     : ",
+                    IntegerToString(AdaptiveV1CurrentLossStreak));
+   DashboardAddLine(row, "ActiveBlockedPattern  : ",
+                    AdaptiveV1PatternText);
+   DashboardAddLine(row, "RemainingCooldownBars : ",
+                    IntegerToString(
+                       AdaptiveV1RemainingCooldownBars));
+   DashboardAddLine(row, "Evaluation Count      : ",
+                    IntegerToString(AdaptiveEvaluationCount));
+   DashboardAddLine(row, "Candidate Signal Count: ",
+                    IntegerToString(AdaptiveCandidateSignalCount));
+   DashboardAddLine(row, "Blocked Opportunities : ",
+                    IntegerToString(
+                       AdaptiveTotalBlockedOpportunities));
+   DashboardAddLine(row, "Executed Trade Count  : ",
+                    IntegerToString(AdaptiveExecutedTradeCount));
+   DashboardAddLine(row, "Activation Count      : ",
+                    IntegerToString(AdaptiveActivationCount));
+   DashboardAddLine(row, "Expire Count          : ",
+                    IntegerToString(AdaptiveExpireCount));
+   DashboardAddLine(row, "Adaptive Episodes     : ",
+                    IntegerToString(AdaptiveEpisodeCount));
+   DashboardAddLine(row, "Active Episodes       : ",
+                    IntegerToString(AdaptiveActiveEpisodes));
+   DashboardAddLine(row, "Expired Episodes      : ",
+                    IntegerToString(AdaptiveExpiredEpisodes));
+   DashboardAddLine(row, "Avg Blocks / Episode  : ",
+                    DoubleToString(
+                       AdaptiveAverageBlockedOpportunitiesPerEpisode(),
+                       2));
+   DashboardAddLine(row, "Max Blocks / Episode  : ",
+                    IntegerToString(
+                       AdaptiveMaxBlockedOpportunitiesInEpisode));
+   DashboardAddLine(row, "Most Blocked Pattern  : ",
+                    AdaptiveMostBlockedPattern);
+   DashboardAddLine(row, "Last Episode Pattern  : ",
+                    AdaptiveLastEpisodePattern);
+   DashboardAddLine(row, "Last Episode Blocks   : ",
+                    IntegerToString(
+                       AdaptiveLastEpisodeBlockedOpportunities));
+   DashboardAddLine(row, "Shadow Trades         : ",
+                    IntegerToString(AdaptiveShadowTradeCount));
+   DashboardAddLine(row, "Shadow Wins           : ",
+                    IntegerToString(AdaptiveShadowWinCount));
+   DashboardAddLine(row, "Shadow Losses         : ",
+                    IntegerToString(AdaptiveShadowLossCount));
+   DashboardAddLine(row, "Shadow Net            : ",
+                    DoubleToString(AdaptiveShadowNetProfit, 2));
+   DashboardAddLine(row, "Shadow PF             : ",
+                    DoubleToString(AdaptiveShadowProfitFactor, 2));
+   DashboardAddLine(row, "Adaptive Est. Benefit : ",
+                    DoubleToString(AdaptiveEstimatedBenefit, 2));
+   DashboardAddLine(row, "Good Block Episodes   : ",
+                    IntegerToString(AdaptiveGoodBlockEpisodes));
+   DashboardAddLine(row, "Bad Block Episodes    : ",
+                    IntegerToString(AdaptiveBadBlockEpisodes));
+   DashboardAddLine(row, "Most Valuable Pattern : ",
+                    AdaptiveShadowBestPattern);
+   DashboardAddLine(row, "Most Harmful Pattern  : ",
+                    AdaptiveShadowWorstPattern);
+   DashboardAddLine(row, "MaxLossCluster        : ",
+                    IntegerToString(AdaptiveV1MaxLossCluster));
+   DashboardAddLine(row, "LastAdaptiveAction    : ",
+                    AdaptiveV1LastActionText);
 
    DashboardClearUnusedLines(row);
 }
@@ -1461,7 +1544,7 @@ void RenderTradeTab()
          }
       }
    }
-   else
+   else if(ActiveTradeSubTab == 2)
    {
       DashboardAddTradeLine(row, "Section               : ", "Execution Monitor");
       DashboardAddTradeLine(row, "Runtime               : ", ExecutionRuntimeText);
@@ -1488,6 +1571,17 @@ void RenderTradeTab()
       DashboardAddTradeLine(row, "Position Count        : ", IntegerToString(ExecutionPositionCount));
       DashboardAddTradeLine(row, "Max Positions         : ", IntegerToString(BacktestMaxPositionsPerSymbol));
       DashboardAddTradeLine(row, "One Trade Per Bar     : ", ExecutionOneTradePerBarText);
+      DashboardAddTradeLine(row, "WeekendProtection     : ",
+                            WeekendProtectionStatusText,
+                            EnableWeekendProtection ? clrGreen : clrGray);
+      DashboardAddTradeLine(row, "WeekendBlockTime      : ",
+                            WeekendBlockTimeText);
+      DashboardAddTradeLine(row, "WeekendForceClose     : ",
+                            WeekendForceCloseTimeText);
+      DashboardAddTradeLine(row, "LastWeekendAction     : ",
+                            LastWeekendAction);
+      DashboardAddTradeLine(row, "LastWeekendActionTime : ",
+                            LastWeekendActionTimeText);
       DashboardAddTradeLine(row, "Last Signal Bar Time  : ", ExecutionLastSignalBarText);
       DashboardAddTradeLine(row, "Last Execution Bar    : ", ExecutionLastBarText);
       DashboardBlankLine(row);
@@ -1499,6 +1593,45 @@ void RenderTradeTab()
       DashboardAddTradeLine(row, "Last Entry / SL / TP  : ", ExecutionLastOrderEntry + " / " + ExecutionLastOrderSL + " / " + ExecutionLastOrderTP);
       DashboardAddTradeLine(row, "Last Trade Retcode    : ", ExecutionLastTradeRetcode);
       DashboardAddTradeLine(row, "Last Error            : ", ExecutionLastErrorText);
+   }
+   else
+   {
+      DashboardAddTradeLine(row, "Section               : ",
+                            "Last 20 Closed Trades");
+      DashboardAddTradeLine(row, "History Count         : ",
+                            IntegerToString(TradeHistoryCount));
+      DashboardBlankLine(row);
+      DashboardSetTradeLine(
+         row,
+         StringFormat("%-12s %-5s %7s %12s %12s %10s",
+                      "#id", "Type", "Volume", "PriceStart",
+                      "PriceEnd", "Profit"),
+         clrDimGray, 9);
+      row++;
+
+      if(TradeHistoryCount == 0)
+      {
+         DashboardAddTradeLine(row, "History               : ",
+                               "NO CLOSED TRADES");
+      }
+      else
+      {
+         for(int i = 0; i < TradeHistoryCount; i++)
+         {
+            double profit = StringToDouble(TradeHistoryProfit[i]);
+            DashboardSetTradeLine(
+               row,
+               StringFormat("%-12s %-5s %7s %12s %12s %10s",
+                            TradeHistoryID[i],
+                            TradeHistoryType[i],
+                            TradeHistoryVolume[i],
+                            TradeHistoryPriceStart[i],
+                            TradeHistoryPriceEnd[i],
+                            TradeHistoryProfit[i]),
+               ProfitColor(profit), 9);
+            row++;
+         }
+      }
    }
 
    DashboardBlankLine(row);
@@ -1718,7 +1851,7 @@ void RenderDebugTab(string symbol)
    DashboardAddHeader(row, "TAB 12 : Developer Debug / Responsible Engine: Developer Engine");
    DashboardAddLine(row, "Rule Version          : ", APP_VERSION);
    DashboardAddLine(row, "Config Version        : ", "Alpha 1.0");
-   DashboardAddLine(row, "Parameter Count       : ", "68");
+   DashboardAddLine(row, "Parameter Count       : ", "77");
    DashboardAddLine(row, "Evaluation Time       : ", "N/A");
    DashboardAddLine(row, "Memory Usage          : ", "N/A");
    DashboardAddLine(row, "Current Preset        : ", "Default");
@@ -1761,6 +1894,18 @@ void RenderDebugTab(string symbol)
    DashboardAddLine(row, "LastTimeoutTicket     : ", TimeoutLastTicketText);
    DashboardAddLine(row, "LastTimeoutCloseResult: ", TimeoutLastCloseResultText);
 
+   DashboardAddHeader(row, "[WEEKEND PROTECTION]");
+   DashboardAddLine(row, "WeekendProtection     : ",
+                    WeekendProtectionStatusText);
+   DashboardAddLine(row, "WeekendBlockTime      : ",
+                    WeekendBlockTimeText);
+   DashboardAddLine(row, "WeekendForceClose     : ",
+                    WeekendForceCloseTimeText);
+   DashboardAddLine(row, "LastWeekendAction     : ",
+                    LastWeekendAction);
+   DashboardAddLine(row, "LastWeekendActionTime : ",
+                    LastWeekendActionTimeText);
+
    DashboardAddHeader(row, "[CSV JOURNAL]");
    DashboardAddLine(row, "CSV Log Enabled       : ", JournalCSVEnabledText);
    DashboardAddLine(row, "CSV Market Label      : ", JournalMarketLabelText);
@@ -1797,6 +1942,9 @@ void RenderDebugTab(string symbol)
    DashboardAddLine(row, "DB Trades Open Written: ", IntegerToString(ResearchDBTotalTradesOpenedWritten));
    DashboardAddLine(row, "DB Trades Close Writ. : ", IntegerToString(ResearchDBTotalTradesClosedWritten));
    DashboardAddLine(row, "DB Schema Version     : ", IntegerToString(ResearchDBSchemaVersion));
+   DashboardAddLine(row, "Market Snapshot Status: ", MarketSnapshotStatusText);
+   DashboardAddLine(row, "Snapshot Capture Time : ", MarketSnapshotLastCaptureTimeText);
+   DashboardAddLine(row, "Snapshot Last Trade ID: ", IntegerToString(MarketSnapshotLastTradeID));
    DashboardAddLine(row, "Pressure Policy Gov.  : ", ResearchDBPressurePolicyIsGoverning ? "YES" : "NO");
    DashboardAddLine(row, "Policy Snapshot Count : ", IntegerToString(ResearchDBPolicySnapshotCount));
    DashboardAddLine(row, "Future Outcome Count  : ", IntegerToString(ResearchDBFutureOutcomeCount));

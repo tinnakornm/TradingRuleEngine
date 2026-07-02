@@ -28,6 +28,7 @@ enum ZONE_SOURCE_MODE
 };
 
 #define TRE_MAX_TRADE_ROWS 3
+#define TRE_MAX_TRADE_HISTORY_ROWS 20
 #define TRE_MAX_STRUCTURE_SWINGS 64
 
 enum ENUM_TRE_STRUCTURE_STAGE
@@ -423,7 +424,7 @@ long ResearchDBLastTradeID = 0;
 int ResearchDBTotalSignalsWritten = 0;
 int ResearchDBTotalTradesOpenedWritten = 0;
 int ResearchDBTotalTradesClosedWritten = 0;
-int ResearchDBSchemaVersion = 5;
+int ResearchDBSchemaVersion = 9;
 int ResearchDBPolicySnapshotCount = 0;
 int ResearchDBFutureOutcomeCount = 0;
 int ResearchDBAnalysisCacheCount = 0;
@@ -482,6 +483,7 @@ bool DashboardVisible = true;
 
 int TradePositionCount = 0;
 int TradePendingCount = 0;
+int TradeHistoryCount = 0;
 double TradeFloatingProfitTotal = 0;
 double AccountMarginLevel = 0;
 
@@ -546,6 +548,20 @@ int TimeoutCurrentBarsHeld = 0;
 int EffectiveBacktestMaxHoldingBars = 24;
 long TimeoutLastPositionIdentifier = 0;
 
+string WeekendProtectionStatusText = "ON";
+string WeekendBlockTimeText = "Friday >= 23:00";
+string WeekendForceCloseTimeText = "Friday >= 23:00";
+string LastWeekendAction = "NONE";
+string LastWeekendActionTimeText = "N/A";
+string WeekendLastCloseResultText = "N/A";
+long WeekendLastClosedPositionIdentifier = 0;
+datetime WeekendLastBlockedSignalBar = 0;
+int WeekendAuditSerial = 0;
+string WeekendAuditDecision = "NONE";
+string WeekendAuditReason = "N/A";
+string WeekendAuditDetail = "N/A";
+datetime WeekendAuditTime = 0;
+
 string TradePositionTicket[TRE_MAX_TRADE_ROWS];
 string TradePositionType[TRE_MAX_TRADE_ROWS];
 string TradePositionVolume[TRE_MAX_TRADE_ROWS];
@@ -575,5 +591,12 @@ string TradePendingDistancePoints[TRE_MAX_TRADE_ROWS];
 string TradePendingOrderTime[TRE_MAX_TRADE_ROWS];
 string TradePendingExpiration[TRE_MAX_TRADE_ROWS];
 string TradePendingComment[TRE_MAX_TRADE_ROWS];
+
+string TradeHistoryID[TRE_MAX_TRADE_HISTORY_ROWS];
+string TradeHistoryType[TRE_MAX_TRADE_HISTORY_ROWS];
+string TradeHistoryVolume[TRE_MAX_TRADE_HISTORY_ROWS];
+string TradeHistoryPriceStart[TRE_MAX_TRADE_HISTORY_ROWS];
+string TradeHistoryPriceEnd[TRE_MAX_TRADE_HISTORY_ROWS];
+string TradeHistoryProfit[TRE_MAX_TRADE_HISTORY_ROWS];
 
 #endif

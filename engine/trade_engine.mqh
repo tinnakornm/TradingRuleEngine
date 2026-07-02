@@ -38,6 +38,16 @@ void TradeResetRow(int index)
    TradePendingComment[index] = "N/A";
 }
 
+void TradeResetHistoryRow(int index)
+{
+   TradeHistoryID[index] = "N/A";
+   TradeHistoryType[index] = "N/A";
+   TradeHistoryVolume[index] = "N/A";
+   TradeHistoryPriceStart[index] = "N/A";
+   TradeHistoryPriceEnd[index] = "N/A";
+   TradeHistoryProfit[index] = "N/A";
+}
+
 string TradeValueOrNA(string value)
 {
    if(value == "")
@@ -302,12 +312,162 @@ void TradeReadPendingOrders(string symbol)
    }
 }
 
+bool TradeHistoryPositionStillOpen(long identifier)
+{
+   for(int i = 0; i < PositionsTotal(); i++)
+   {
+      if(PositionGetTicket(i) > 0 &&
+         PositionGetInteger(POSITION_IDENTIFIER) == identifier)
+         return true;
+   }
+   return false;
+}
+
+int TradeFindHistoryPosition(long &identifiers[], long identifier)
+{
+   for(int i = 0; i < TradeHistoryCount; i++)
+      if(identifiers[i] == identifier)
+         return i;
+   return -1;
+}
+
+void TradeReadHistory(string symbol)
+{
+   if(ActiveTradeSubTab != 3)
+      return;
+
+   if(!HistorySelect(0, TimeCurrent()))
+      return;
+
+   int totalDeals = HistoryDealsTotal();
+   static int lastHistoryDeals = -1;
+   static string lastHistorySymbol = "";
+   if(totalDeals == lastHistoryDeals &&
+      symbol == lastHistorySymbol)
+      return;
+
+   lastHistoryDeals = totalDeals;
+   lastHistorySymbol = symbol;
+   TradeHistoryCount = 0;
+   for(int row = 0; row < TRE_MAX_TRADE_HISTORY_ROWS; row++)
+      TradeResetHistoryRow(row);
+
+   long identifiers[TRE_MAX_TRADE_HISTORY_ROWS];
+   long types[TRE_MAX_TRADE_HISTORY_ROWS];
+   double entryVolume[TRE_MAX_TRADE_HISTORY_ROWS];
+   double entryValue[TRE_MAX_TRADE_HISTORY_ROWS];
+   double exitVolume[TRE_MAX_TRADE_HISTORY_ROWS];
+   double exitValue[TRE_MAX_TRADE_HISTORY_ROWS];
+   double netProfit[TRE_MAX_TRADE_HISTORY_ROWS];
+
+   for(int row = 0; row < TRE_MAX_TRADE_HISTORY_ROWS; row++)
+   {
+      identifiers[row] = 0;
+      types[row] = -1;
+      entryVolume[row] = 0;
+      entryValue[row] = 0;
+      exitVolume[row] = 0;
+      exitValue[row] = 0;
+      netProfit[row] = 0;
+   }
+
+   for(int i = totalDeals - 1;
+       i >= 0 && TradeHistoryCount < TRE_MAX_TRADE_HISTORY_ROWS;
+       i--)
+   {
+      ulong deal = HistoryDealGetTicket(i);
+      if(deal == 0 ||
+         HistoryDealGetString(deal, DEAL_SYMBOL) != symbol)
+         continue;
+
+      long entry = HistoryDealGetInteger(deal, DEAL_ENTRY);
+      if(entry != DEAL_ENTRY_OUT && entry != DEAL_ENTRY_OUT_BY)
+         continue;
+
+      long identifier =
+         HistoryDealGetInteger(deal, DEAL_POSITION_ID);
+      if(identifier <= 0 ||
+         TradeHistoryPositionStillOpen(identifier) ||
+         TradeFindHistoryPosition(identifiers, identifier) >= 0)
+         continue;
+
+      identifiers[TradeHistoryCount] = identifier;
+      TradeHistoryCount++;
+   }
+
+   for(int i = 0; i < totalDeals; i++)
+   {
+      ulong deal = HistoryDealGetTicket(i);
+      if(deal == 0 ||
+         HistoryDealGetString(deal, DEAL_SYMBOL) != symbol)
+         continue;
+
+      long identifier =
+         HistoryDealGetInteger(deal, DEAL_POSITION_ID);
+      int row = TradeFindHistoryPosition(identifiers, identifier);
+      if(row < 0)
+         continue;
+
+      long entry = HistoryDealGetInteger(deal, DEAL_ENTRY);
+      long dealType = HistoryDealGetInteger(deal, DEAL_TYPE);
+      double volume = HistoryDealGetDouble(deal, DEAL_VOLUME);
+      double price = HistoryDealGetDouble(deal, DEAL_PRICE);
+
+      if(entry == DEAL_ENTRY_IN || entry == DEAL_ENTRY_INOUT)
+      {
+         entryVolume[row] += volume;
+         entryValue[row] += price * volume;
+         if(types[row] < 0)
+            types[row] =
+               (dealType == DEAL_TYPE_BUY)
+               ? POSITION_TYPE_BUY
+               : POSITION_TYPE_SELL;
+      }
+
+      if(entry == DEAL_ENTRY_OUT ||
+         entry == DEAL_ENTRY_OUT_BY ||
+         entry == DEAL_ENTRY_INOUT)
+      {
+         exitVolume[row] += volume;
+         exitValue[row] += price * volume;
+      }
+
+      netProfit[row] +=
+         HistoryDealGetDouble(deal, DEAL_PROFIT) +
+         HistoryDealGetDouble(deal, DEAL_SWAP) +
+         HistoryDealGetDouble(deal, DEAL_COMMISSION) +
+         HistoryDealGetDouble(deal, DEAL_FEE);
+   }
+
+   int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
+   for(int row = 0; row < TradeHistoryCount; row++)
+   {
+      double startPrice =
+         (entryVolume[row] > 0)
+         ? entryValue[row] / entryVolume[row]
+         : 0;
+      double endPrice =
+         (exitVolume[row] > 0)
+         ? exitValue[row] / exitVolume[row]
+         : 0;
+      TradeHistoryID[row] = IntegerToString(identifiers[row]);
+      TradeHistoryType[row] = PositionTypeToText(types[row]);
+      TradeHistoryVolume[row] = DoubleToString(exitVolume[row], 2);
+      TradeHistoryPriceStart[row] =
+         PriceToText(startPrice, digits);
+      TradeHistoryPriceEnd[row] =
+         PriceToText(endPrice, digits);
+      TradeHistoryProfit[row] = DoubleToString(netProfit[row], 2);
+   }
+}
+
 void TradeEngine(string symbol)
 {
    TradeResetState();
    TradeReadAccountState();
    TradeReadPositions(symbol);
    TradeReadPendingOrders(symbol);
+   TradeReadHistory(symbol);
 }
 
 #endif

@@ -53,6 +53,212 @@ string TRE_ExecutionTimeToText(datetime value)
    return TimeToString(value, TIME_DATE|TIME_MINUTES);
 }
 
+string TRE_WeekendDayToText(ENUM_DAY_OF_WEEK day)
+{
+   if(day == SUNDAY) return "Sunday";
+   if(day == MONDAY) return "Monday";
+   if(day == TUESDAY) return "Tuesday";
+   if(day == WEDNESDAY) return "Wednesday";
+   if(day == THURSDAY) return "Thursday";
+   if(day == FRIDAY) return "Friday";
+   if(day == SATURDAY) return "Saturday";
+   return "Unknown";
+}
+
+int TRE_WeekendHour(int configuredHour)
+{
+   return (int)MathMax(0, MathMin(23, configuredHour));
+}
+
+void TRE_RefreshWeekendProtectionState()
+{
+   int blockHour = TRE_WeekendHour(WeekendBlockHour);
+   int closeHour = TRE_WeekendHour(WeekendForceCloseHour);
+   string day = TRE_WeekendDayToText(WeekendBlockDay);
+   WeekendProtectionStatusText = EnableWeekendProtection ? "ON" : "OFF";
+   WeekendBlockTimeText =
+      day + " >= " + StringFormat("%02d:00", blockHour);
+   WeekendForceCloseTimeText =
+      day + " >= " + StringFormat("%02d:00", closeHour);
+}
+
+bool TRE_IsWeekendProtectionTime(int configuredHour)
+{
+   MqlDateTime serverTime;
+   ZeroMemory(serverTime);
+   if(!TimeToStruct(TimeCurrent(), serverTime))
+      return false;
+   return (serverTime.day_of_week == (int)WeekendBlockDay &&
+           serverTime.hour >= TRE_WeekendHour(configuredHour));
+}
+
+void TRE_RegisterWeekendAudit(string decision,
+                              string reason,
+                              string detail)
+{
+   WeekendAuditDecision = decision;
+   WeekendAuditReason = reason;
+   WeekendAuditDetail = detail;
+   WeekendAuditTime = TimeCurrent();
+   WeekendAuditSerial++;
+}
+
+bool TRE_WeekendEntryBlocked(datetime signalBar)
+{
+   if(!EnableWeekendProtection ||
+      !TRE_IsWeekendProtectionTime(WeekendBlockHour))
+   {
+      return false;
+   }
+
+   string reason = "BLOCK_WEEKEND_PROTECTION_FRIDAY_LATE_ENTRY";
+   ExecutionCanExecuteText = "NO";
+   LastExecutionAction = "BLOCKED";
+   LastExecutionReason = reason;
+   LastWeekendAction = reason;
+   LastWeekendActionTimeText =
+      TRE_ExecutionTimeToText(TimeCurrent());
+   TRE_LogExecutionOnce(reason);
+
+   if(signalBar != WeekendLastBlockedSignalBar)
+   {
+      WeekendLastBlockedSignalBar = signalBar;
+      TRE_RegisterWeekendAudit(
+         "BLOCK", reason,
+         "RuleName=WeekendProtection;Decision=BLOCK;Reason=" + reason);
+   }
+   return true;
+}
+
+bool TRE_CloseWeekendPosition(string symbol,
+                              ulong ticket,
+                              long identifier)
+{
+   // Weekend management repeats the existing tester-only safety contract.
+   if(ExecutionMode != TRE_BACKTEST_ONLY ||
+      !TRE_IsStrategyTester() ||
+      !EnableWeekendProtection ||
+      !TRE_IsWeekendProtectionTime(WeekendForceCloseHour))
+   {
+      return false;
+   }
+
+   long positionType = PositionGetInteger(POSITION_TYPE);
+   string direction =
+      (positionType == POSITION_TYPE_BUY) ? "BUY" : "SELL";
+   datetime openTime =
+      (datetime)PositionGetInteger(POSITION_TIME);
+   datetime closeTime = TimeCurrent();
+   double profit = PositionGetDouble(POSITION_PROFIT);
+   int holdingMinutes =
+      (int)MathMax(0, (long)(closeTime - openTime) / 60);
+
+   TREBacktestTrade.SetExpertMagicNumber((ulong)BacktestMagicNumber);
+   TREBacktestTrade.SetTypeFillingBySymbol(symbol);
+   TREBacktestTrade.SetAsyncMode(false);
+   ResetLastError();
+
+   // Repeat every condition immediately before the trade operation.
+   if(ExecutionMode != TRE_BACKTEST_ONLY ||
+      MQLInfoInteger(MQL_TESTER) == 0 ||
+      !EnableWeekendProtection ||
+      !TRE_IsWeekendProtectionTime(WeekendForceCloseHour))
+   {
+      return false;
+   }
+
+   bool requestSent = TREBacktestTrade.PositionClose(ticket);
+   int lastError = GetLastError();
+   uint retcode = TREBacktestTrade.ResultRetcode();
+   string description = TREBacktestTrade.ResultRetcodeDescription();
+   bool accepted = requestSent &&
+                   (retcode == TRADE_RETCODE_DONE ||
+                    retcode == TRADE_RETCODE_DONE_PARTIAL);
+
+   ExecutionLastTradeRetcode = IntegerToString((int)retcode) +
+                               " / " + description;
+   ExecutionLastErrorText = IntegerToString(lastError);
+
+   if(!accepted)
+   {
+      WeekendLastCloseResultText = "FAILED";
+      LastWeekendAction = "CLOSE FAILED";
+      LastWeekendActionTimeText =
+         TRE_ExecutionTimeToText(closeTime);
+      LastExecutionAction = "WEEKEND CLOSE FAILED";
+      LastExecutionReason = description;
+      Print("[WEEKEND_PROTECTION] Ticket=", (long)ticket,
+            " Symbol=", symbol,
+            " Action=CLOSE_FAILED",
+            " Retcode=", (int)retcode,
+            " Error=", lastError,
+            " Reason=", description);
+      return false;
+   }
+
+   ulong closeDeal = TREBacktestTrade.ResultDeal();
+   if(closeDeal > 0 && HistoryDealSelect(closeDeal))
+      profit = HistoryDealGetDouble(closeDeal, DEAL_PROFIT);
+
+   string reason = "CLOSE_WEEKEND_PROTECTION";
+   WeekendLastClosedPositionIdentifier = identifier;
+   WeekendLastCloseResultText = "OK";
+   LastWeekendAction = reason;
+   LastWeekendActionTimeText =
+      TRE_ExecutionTimeToText(closeTime);
+   LastExecutionAction = "WEEKEND CLOSED";
+   LastExecutionReason = reason;
+   string detail =
+      "Ticket=" + IntegerToString((long)ticket) +
+      ";Symbol=" + symbol +
+      ";Direction=" + direction +
+      ";OpenTime=" + TRE_ExecutionTimeToText(openTime) +
+      ";CloseTime=" + TRE_ExecutionTimeToText(closeTime) +
+      ";Profit=" + DoubleToString(profit, 2) +
+      ";HoldingMinutes=" + IntegerToString(holdingMinutes) +
+      ";Reason=" + reason;
+   TRE_RegisterWeekendAudit("CLOSE", reason, detail);
+   Print("[WEEKEND_PROTECTION] Ticket=", (long)ticket,
+         " Symbol=", symbol,
+         " Direction=", direction,
+         " OpenTime=", TRE_ExecutionTimeToText(openTime),
+         " CloseTime=", TRE_ExecutionTimeToText(closeTime),
+         " Profit=", DoubleToString(profit, 2),
+         " HoldingMinutes=", holdingMinutes,
+         " Reason=", reason);
+   return true;
+}
+
+bool TRE_ManageWeekendProtection(string symbol)
+{
+   if(ExecutionMode != TRE_BACKTEST_ONLY ||
+      !TRE_IsStrategyTester() ||
+      !EnableWeekendProtection ||
+      !TRE_IsWeekendProtectionTime(WeekendForceCloseHour))
+   {
+      return false;
+   }
+
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket == 0 ||
+         PositionGetString(POSITION_SYMBOL) != symbol ||
+         PositionGetInteger(POSITION_MAGIC) != BacktestMagicNumber)
+      {
+         continue;
+      }
+
+      long identifier = PositionGetInteger(POSITION_IDENTIFIER);
+      if(TRE_CloseWeekendPosition(symbol, ticket, identifier))
+         return true;
+
+      // Retry the first eligible position on the next tick after a failure.
+      return false;
+   }
+   return false;
+}
+
 int TRE_BarsBetween(string symbol,
                     ENUM_TIMEFRAMES timeframe,
                     datetime openTime,
@@ -510,6 +716,7 @@ bool TRE_PositionRulesAllow(string symbol,
 
 void TRE_RefreshExecutionState(string symbol)
 {
+   TRE_RefreshWeekendProtectionState();
    ExecutionModeText = TRE_ExecutionModeToText();
    ExecutionRuntimeText = TRE_IsStrategyTester() ? "Strategy Tester" : "Live Chart";
    ExecutionAllowedText = TRE_CanExecute() ? "YES" : "NO";
@@ -566,6 +773,39 @@ void TRE_RefreshExecutionState(string symbol)
       LastExecutionReason = "Not running in Strategy Tester";
       TRE_LogExecutionOnce("TRE Execution Blocked: Not running in Strategy Tester");
    }
+}
+
+bool TRE_OrderCandidatePreflightAllows(string symbol)
+{
+   if(ExecutionNormalizedLot <= 0 ||
+      ExecutionLotValidationText == "INVALID")
+   {
+      ExecutionCanExecuteText = "NO";
+      LastExecutionAction = "FAILED";
+      LastExecutionReason = "Invalid normalized volume";
+      TRE_LogExecutionOnce("TRE Order Failed: Invalid normalized volume");
+      return false;
+   }
+
+   if(ExecutionSLTPValidationText == "INVALID")
+   {
+      ExecutionCanExecuteText = "NO";
+      LastExecutionAction = "FAILED";
+      LastExecutionReason = "Invalid SL/TP configuration";
+      TRE_LogExecutionOnce("TRE Order Failed: Invalid SL/TP configuration");
+      return false;
+   }
+
+   MqlTick tick;
+   if(!SymbolInfoTick(symbol, tick) || tick.ask <= 0 || tick.bid <= 0)
+   {
+      ExecutionCanExecuteText = "NO";
+      LastExecutionAction = "FAILED";
+      LastExecutionReason = "No valid market price";
+      TRE_LogExecutionOnce("TRE Order Failed: No valid market price");
+      return false;
+   }
+   return true;
 }
 
 bool TRE_SendBacktestOrder(string symbol, ENTRY_ACTION action)
@@ -628,6 +868,12 @@ bool TRE_SendBacktestOrder(string symbol, ENTRY_ACTION action)
    ExecutionLastOrderTP = DoubleToString(takeProfit, ExecutionDigits);
    ExecutionLastTradeRetcode = "N/A";
    ExecutionLastErrorText = "0";
+   // Capture raw features only after every entry filter has passed and
+   // immediately before the synchronous Buy/Sell request.
+   MarketSnapshotCapture(symbol, action);
+   MarketSnapshotBindExecution(action,
+                               ExecutionNormalizedLot,
+                               entry);
 
    TREBacktestTrade.SetExpertMagicNumber((ulong)BacktestMagicNumber);
    TREBacktestTrade.SetTypeFillingBySymbol(symbol);
@@ -638,7 +884,10 @@ bool TRE_SendBacktestOrder(string symbol, ENTRY_ACTION action)
    if(isBuy)
    {
       if(!TRE_CanExecute())
+      {
+         MarketSnapshotCancelExecution();
          return false;
+      }
 
       requestSent = TREBacktestTrade.Buy(ExecutionNormalizedLot,
                                          symbol,
@@ -650,7 +899,10 @@ bool TRE_SendBacktestOrder(string symbol, ENTRY_ACTION action)
    else
    {
       if(!TRE_CanExecute())
+      {
+         MarketSnapshotCancelExecution();
          return false;
+      }
 
       requestSent = TREBacktestTrade.Sell(ExecutionNormalizedLot,
                                           symbol,
@@ -682,6 +934,19 @@ bool TRE_SendBacktestOrder(string symbol, ENTRY_ACTION action)
       ExecutionLastOrderTicket = IntegerToString((long)ticket);
       LastExecutionAction = side + " SENT";
       LastExecutionReason = "Backtest order sent successfully";
+      AdaptiveV1RecordExecutedTrade(symbol, action, CurrentZone);
+      MarketSnapshotCommitExecution();
+      bool adaptiveRegistered =
+         AdaptiveLossClusterRegisterOpenPosition(
+            symbol, action, CurrentZone);
+      if(AdaptiveV1Enabled() && !adaptiveRegistered)
+      {
+         Print("[ADAPTIVE_LOSS_CLUSTER] action=TRACK_FAILED symbol=",
+               symbol,
+               " reason=Opened position was not available for tracking");
+      }
+      if(!UseResearchDB || !ResearchDBWriteTrades)
+         MarketSnapshotReleaseAdaptiveOnly();
       ExecutionPositionCount = TRE_CountBacktestPositions(symbol);
 
       if(ExecutionPositionCount >= BacktestMaxPositionsPerSymbol)
@@ -697,6 +962,7 @@ bool TRE_SendBacktestOrder(string symbol, ENTRY_ACTION action)
 
    LastExecutionAction = "FAILED";
    LastExecutionReason = retcodeDescription;
+   MarketSnapshotCancelExecution();
    ExecutionCanExecuteText = "NO";
    Print("TRE Order Failed: retcode=", IntegerToString((int)retcode),
          " reason=", retcodeDescription,
@@ -708,10 +974,26 @@ void ExecutionEngine(string symbol)
 {
    TRE_RefreshExecutionState(symbol);
 
-   bool timeoutClosed = TRE_ManageBacktestTimeout(symbol);
+   bool weekendClosed = TRE_ManageWeekendProtection(symbol);
+   if(weekendClosed)
+   {
+      TRE_RefreshExecutionState(symbol);
+      // Preserve close attribution; a ready signal will be blocked next tick.
+      return;
+   }
+
+   bool weekendCloseWindow =
+      (EnableWeekendProtection &&
+       TRE_IsWeekendProtectionTime(WeekendForceCloseHour));
+   bool timeoutClosed =
+      weekendCloseWindow ? false : TRE_ManageBacktestTimeout(symbol);
 
    if(timeoutClosed)
+   {
       TRE_RefreshExecutionState(symbol);
+      // Make a timeout loss visible to the adaptive filter before re-entry.
+      AdaptiveCaptureClosedTrades(symbol);
+   }
 
    if(!TRE_CanExecute())
       return;
@@ -727,6 +1009,9 @@ void ExecutionEngine(string symbol)
    datetime signalBarTime = iTime(symbol, _Period, 0);
    ExecutionLastSignalBarTime = signalBarTime;
    ExecutionLastSignalBarText = TRE_ExecutionTimeToText(signalBarTime);
+
+   if(TRE_WeekendEntryBlocked(signalBarTime))
+      return;
 
    string positionReason = "";
 
@@ -756,6 +1041,27 @@ void ExecutionEngine(string symbol)
       LastExecutionAction = "FAILED";
       LastExecutionReason = "Signal bar time unavailable";
       TRE_LogExecutionOnce("TRE Order Failed: Signal bar time unavailable");
+      return;
+   }
+
+   if(!TRE_OrderCandidatePreflightAllows(symbol))
+      return;
+
+   // All normal strategy, execution-risk, weekend, position and per-bar
+   // guards have passed. Without Adaptive V1 this is an order candidate.
+   string adaptiveReason = "";
+   if(!AdaptiveLossClusterAllowsEntry(
+         symbol, ActionState, adaptiveReason))
+   {
+      AdaptiveShadowOpen(
+         symbol, ActionState, CurrentZone,
+         AdaptiveCurrentEpisodeID,
+         AdaptiveV1LastBlockedAuditSerial);
+      ExecutionCanExecuteText = "NO";
+      LastExecutionAction = "BLOCKED";
+      LastExecutionReason = adaptiveReason;
+      TRE_LogExecutionOnce(
+         "TRE Execution Blocked: " + adaptiveReason);
       return;
    }
 

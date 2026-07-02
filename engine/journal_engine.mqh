@@ -19,6 +19,14 @@ struct TRE_JournalTrade
    double entry;
    double stopLoss;
    double takeProfit;
+   double requestedSLPoints;
+   double requestedTPPoints;
+   double effectiveSLPoints;
+   double effectiveTPPoints;
+   double symbolPoint;
+   double tickSize;
+   double tickValue;
+   double spreadAtEntry;
    int zone;
    int score;
    string researchMode;
@@ -405,6 +413,49 @@ void JournalWriteParameters()
              BacktestMaxHoldingBars);
    FileWrite(TREJournalHandle, "PARAMETER", "HoldingBarsTF",
              TimeframeToText(ExecutionTF));
+   FileWrite(TREJournalHandle, "PARAMETER", "EnableWeekendProtection",
+             JournalBoolText(EnableWeekendProtection));
+   FileWrite(TREJournalHandle, "PARAMETER", "WeekendBlockDay",
+             TRE_WeekendDayToText(WeekendBlockDay));
+   FileWrite(TREJournalHandle, "PARAMETER", "WeekendBlockHour",
+             TRE_WeekendHour(WeekendBlockHour));
+   FileWrite(TREJournalHandle, "PARAMETER", "WeekendForceCloseHour",
+             TRE_WeekendHour(WeekendForceCloseHour));
+   FileWrite(TREJournalHandle, "PARAMETER", "EnableAdaptiveLossCluster",
+             JournalBoolText(EnableAdaptiveLossCluster));
+   FileWrite(TREJournalHandle, "PARAMETER", "LossClusterThreshold",
+             AdaptiveEffectiveThreshold());
+   FileWrite(TREJournalHandle, "PARAMETER", "LossClusterCooldownBars",
+             AdaptiveEffectiveCooldown());
+   FileWrite(TREJournalHandle, "PARAMETER", "AdaptiveClusterMode",
+             AdaptiveClusterModeText());
+   FileWrite(TREJournalHandle, "PARAMETER",
+             "UseAdvancedAdaptiveCluster",
+             JournalBoolText(UseAdvancedAdaptiveCluster));
+   FileWrite(TREJournalHandle, "PARAMETER", "AdaptiveEnableBUYZone1",
+             JournalBoolText(AdaptiveEnableBUYZone1));
+   FileWrite(TREJournalHandle, "PARAMETER", "AdaptiveEnableBUYZone2",
+             JournalBoolText(AdaptiveEnableBUYZone2));
+   FileWrite(TREJournalHandle, "PARAMETER", "AdaptiveEnableBUYZone3",
+             JournalBoolText(AdaptiveEnableBUYZone3));
+   FileWrite(TREJournalHandle, "PARAMETER", "AdaptiveEnableBUYZone4",
+             JournalBoolText(AdaptiveEnableBUYZone4));
+   FileWrite(TREJournalHandle, "PARAMETER", "AdaptiveEnableBUYZone5",
+             JournalBoolText(AdaptiveEnableBUYZone5));
+   FileWrite(TREJournalHandle, "PARAMETER", "AdaptiveEnableBUYZone6",
+             JournalBoolText(AdaptiveEnableBUYZone6));
+   FileWrite(TREJournalHandle, "PARAMETER", "AdaptiveEnableSELLZone1",
+             JournalBoolText(AdaptiveEnableSELLZone1));
+   FileWrite(TREJournalHandle, "PARAMETER", "AdaptiveEnableSELLZone2",
+             JournalBoolText(AdaptiveEnableSELLZone2));
+   FileWrite(TREJournalHandle, "PARAMETER", "AdaptiveEnableSELLZone3",
+             JournalBoolText(AdaptiveEnableSELLZone3));
+   FileWrite(TREJournalHandle, "PARAMETER", "AdaptiveEnableSELLZone4",
+             JournalBoolText(AdaptiveEnableSELLZone4));
+   FileWrite(TREJournalHandle, "PARAMETER", "AdaptiveEnableSELLZone5",
+             JournalBoolText(AdaptiveEnableSELLZone5));
+   FileWrite(TREJournalHandle, "PARAMETER", "AdaptiveEnableSELLZone6",
+             JournalBoolText(AdaptiveEnableSELLZone6));
 }
 
 void JournalWriteHeaders()
@@ -423,7 +474,17 @@ void JournalWriteHeaders()
              "Symbol", "Lot", "Entry", "ClosePrice", "SL", "TP",
              "Profit", "Swap", "Commission", "NetProfit", "CloseReason",
              "BarsHeld", "RiskReward", "ProfitUSD", "TradeDurationBars",
-             "ExitReason");
+             "ExitReason",
+             "requested_sl_points", "requested_tp_points",
+             "effective_sl_points", "effective_tp_points",
+             "entry_price", "sl_price", "tp_price", "close_price",
+             "close_reason", "actual_volume", "symbol_point",
+             "tick_size", "tick_value", "spread_at_entry",
+             "commission", "swap", "gross_profit", "net_profit",
+             "expected_loss_money", "expected_profit_money",
+             "profit_deviation_money", "profit_deviation_points",
+             "is_exact_sl_hit", "is_exact_tp_hit",
+             "is_timeout_exit", "is_tester_close", "audit_reason");
 }
 
 void JournalResetTracking()
@@ -786,6 +847,16 @@ void JournalCaptureOpenTrades(string symbol)
 
    int total = PositionsTotal();
    int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
+   MqlTick entryTick;
+   ZeroMemory(entryTick);
+   SymbolInfoTick(symbol, entryTick);
+   double symbolPoint = SymbolInfoDouble(symbol, SYMBOL_POINT);
+   double tickSize = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_SIZE);
+   double tickValue = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_VALUE);
+   double spreadAtEntry =
+      (symbolPoint > 0)
+      ? (entryTick.ask - entryTick.bid) / symbolPoint
+      : 0;
 
    for(int i = 0; i < total; i++)
    {
@@ -823,6 +894,14 @@ void JournalCaptureOpenTrades(string symbol)
       trade.entry = PositionGetDouble(POSITION_PRICE_OPEN);
       trade.stopLoss = PositionGetDouble(POSITION_SL);
       trade.takeProfit = PositionGetDouble(POSITION_TP);
+      trade.requestedSLPoints = ExecutionRequestedSLPoints;
+      trade.requestedTPPoints = ExecutionRequestedTPPoints;
+      trade.effectiveSLPoints = ExecutionEffectiveSLPoints;
+      trade.effectiveTPPoints = ExecutionEffectiveTPPoints;
+      trade.symbolPoint = symbolPoint;
+      trade.tickSize = tickSize;
+      trade.tickValue = tickValue;
+      trade.spreadAtEntry = spreadAtEntry;
       trade.zone = CurrentZone;
       trade.score = TotalScore;
       trade.researchMode = ResearchDecisionModeText;
@@ -988,8 +1067,19 @@ void JournalWriteClosedTrade(int index, string symbol)
    {
       closeReason = "TIMEOUT";
    }
+   else if(WeekendLastCloseResultText == "OK" &&
+           trade.identifier == WeekendLastClosedPositionIdentifier)
+   {
+      closeReason = "CLOSE_WEEKEND_PROTECTION";
+   }
 
    double netProfit = profit + swap + commission;
+   TRE_TradeCloseAudit audit;
+   TRE_BuildTradeCloseAudit(
+      trade.type, trade.entry, trade.stopLoss, trade.takeProfit,
+      closePrice, trade.lot, trade.effectiveSLPoints,
+      trade.effectiveTPPoints, trade.symbolPoint, trade.tickSize,
+      trade.tickValue, profit, commission, swap, closeReason, audit);
    double realizedRR = JournalRiskReward(trade.type,
                                          trade.entry,
                                          trade.stopLoss,
@@ -1066,7 +1156,34 @@ void JournalWriteClosedTrade(int index, string symbol)
              DoubleToString(realizedRR, 2),
              DoubleToString(netProfit, 2),
              barsHeld,
-             closeReason);
+             closeReason,
+             DoubleToString(trade.requestedSLPoints, 2),
+             DoubleToString(trade.requestedTPPoints, 2),
+             DoubleToString(trade.effectiveSLPoints, 2),
+             DoubleToString(trade.effectiveTPPoints, 2),
+             DoubleToString(trade.entry, digits),
+             DoubleToString(trade.stopLoss, digits),
+             DoubleToString(trade.takeProfit, digits),
+             DoubleToString(closePrice, digits),
+             closeReason,
+             DoubleToString(trade.lot, 4),
+             DoubleToString(trade.symbolPoint, digits),
+             DoubleToString(trade.tickSize, digits),
+             DoubleToString(trade.tickValue, 8),
+             DoubleToString(trade.spreadAtEntry, 2),
+             DoubleToString(commission, 2),
+             DoubleToString(swap, 2),
+             DoubleToString(profit, 2),
+             DoubleToString(netProfit, 2),
+             DoubleToString(audit.expectedLossMoney, 2),
+             DoubleToString(audit.expectedProfitMoney, 2),
+             DoubleToString(audit.profitDeviationMoney, 2),
+             DoubleToString(audit.profitDeviationPoints, 2),
+             JournalBoolText(audit.exactSLHit),
+             JournalBoolText(audit.exactTPHit),
+             JournalBoolText(audit.timeoutExit),
+             JournalBoolText(audit.testerClose),
+             audit.auditReason);
 
    TREJournalTrades[index].active = false;
    TREJournalTrades[index].tradeId = 0;

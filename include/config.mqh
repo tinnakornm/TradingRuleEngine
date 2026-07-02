@@ -72,6 +72,12 @@ enum ENUM_PRESSURE_EXECUTION_BLOCK_MODE
    PRESSURE_EXECUTION_MEDIUM_HIGH_BLOCK = 3
 };
 
+enum ENUM_ADAPTIVE_CLUSTER_MODE
+{
+   SIMPLE_DIRECTION_ZONE = 0,
+   ADAPTIVE_CLUSTER_ADVANCED_RESERVED = 1
+};
+
 input string InpSymbol        = "GOLDmicro";
 input ENUM_TIMEFRAMES ZoneTF  = PERIOD_H1;
 input ENUM_TIMEFRAMES BiasTF  = PERIOD_H4;
@@ -112,6 +118,28 @@ input bool BacktestAllowOppositePosition = false;
 input bool BacktestOneTradePerBar = true;
 input bool UseBacktestMaxHoldingBars = false;
 input int BacktestMaxHoldingBars = 24;
+input bool EnableWeekendProtection = true;
+input ENUM_DAY_OF_WEEK WeekendBlockDay = FRIDAY;
+input int WeekendBlockHour = 23;
+input int WeekendForceCloseHour = 23;
+input bool EnableAdaptiveLossCluster = true;
+input int LossClusterThreshold = 3;
+input int LossClusterCooldownBars = 20;
+input ENUM_ADAPTIVE_CLUSTER_MODE AdaptiveClusterMode =
+   SIMPLE_DIRECTION_ZONE;
+input bool UseAdvancedAdaptiveCluster = false;
+input bool AdaptiveEnableBUYZone1 = true;
+input bool AdaptiveEnableBUYZone2 = false;
+input bool AdaptiveEnableBUYZone3 = false;
+input bool AdaptiveEnableBUYZone4 = false;
+input bool AdaptiveEnableBUYZone5 = false;
+input bool AdaptiveEnableBUYZone6 = false;
+input bool AdaptiveEnableSELLZone1 = false;
+input bool AdaptiveEnableSELLZone2 = false;
+input bool AdaptiveEnableSELLZone3 = false;
+input bool AdaptiveEnableSELLZone4 = false;
+input bool AdaptiveEnableSELLZone5 = false;
+input bool AdaptiveEnableSELLZone6 = false;
 
 input bool UseTrendScore = true;
 input bool UseZoneScore = true;
